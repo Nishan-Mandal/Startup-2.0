@@ -3,6 +3,8 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
+import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -145,9 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
             // 🔹 Top Bar + Location Selector
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -198,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 8),
                   _dotsIndicator(),
                   const SizedBox(height: 20),
-                  _headings('Popular Categories'),
+                  _headings('Popular Categories', services),
                   const SizedBox(height: 12),
                   _categoriesTab(),
                   const SizedBox(height: 20),
@@ -216,19 +216,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  _headings("Recommended"),
+                  _headings("Recommended", services),
                   const SizedBox(height: 20),
                   _listingsData(services),
                   const SizedBox(height: 20),
                   _bannerData(''),
                   const SizedBox(height: 20),
-                  _headings("Rentals"),
+                  _headings("Rentals", services),
                   const SizedBox(height: 20),
                   _listingsData(services),
                   const SizedBox(height: 20),
                   _bannerData(''),
                   const SizedBox(height: 20),
-                  _headings("Stores"),
+                  _headings("Stores", services),
                   const SizedBox(height: 20),
                   _listingsData(services),
                   const SizedBox(height: 20),
@@ -417,7 +417,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _headings(String heading) {
+  Widget _headings(String heading, List<Map<String, dynamic>> listings) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15),
       child: Row(
@@ -425,9 +425,24 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Text(
             heading,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          Text("See All >", style: TextStyle(color: Colors.orange)),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (context) =>
+                          ListingPage(title: heading, listings: listings),
+                ),
+              );
+            },
+            child: const Text(
+              "See All >",
+              style: TextStyle(color: Colors.orange),
+            ),
+          ),
         ],
       ),
     );
@@ -594,70 +609,106 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       itemBuilder: (context, index) {
         final service = listings[index];
-        return Container(
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 6,
-                offset: const Offset(1, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
+        return GestureDetector(
+          onTap:
+              () {
+                Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ListingDetailScreen(
+                    title: "Fruit Shop",
+                    location: "City Center, Haldia",
+                    rating: 4.5,
+                    images: [
+                      "https://picsum.photos/200/300",
+                      "https://picsum.photos/201/300",
+                      "https://picsum.photos/202/300",
+                    ],
+                    sellerName: "Jone Doe",
+                    sellerRole: "Owner",
+                    sellerImage: "https://i.pravatar.cc/150?img=3",
+                    description: "Passage became common when Letraset revolutionized...",
+                    reviews: [
+                      Review(text: "Nice shop... love it", rating: 4.0),
+                      Review(text: "Great service!", rating: 5.0),
+                      Review(text: "Fresh fruits at good price", rating: 4.5),
+                    ],
+                  ),
                 ),
-                child: Image.network(
-                  service["image"],
-                  height: 100,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
+              );
+              },
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 6,
+                  offset: const Offset(1, 2),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      service["title"],
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      service["subtitle"],
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.star, color: Colors.orange, size: 16),
-                        Text(
-                          "${service["rating"]} (${service["reviews"]})",
-                          style: const TextStyle(fontSize: 12),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  child: Image.network(
+                    service["image"],
+                    height: 100,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        service["title"],
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        service["subtitle"],
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.star,
+                            color: Colors.orange,
+                            size: 16,
+                          ),
+                          Text(
+                            "${service["rating"]} (${service["reviews"]})",
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _bannerData(String imageLink){
+  Widget _bannerData(String imageLink) {
     return Container(
       padding: EdgeInsets.all(20),
       width: double.infinity,
@@ -668,7 +719,7 @@ class _HomeScreenState extends State<HomeScreen> {
         width: double.infinity,
         decoration: BoxDecoration(
           color: Colors.orange.shade100,
-          borderRadius: BorderRadius.all(Radius.circular(20))
+          borderRadius: BorderRadius.all(Radius.circular(20)),
         ),
       ),
     );
