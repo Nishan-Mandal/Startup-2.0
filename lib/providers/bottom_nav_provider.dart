@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 
 class BottomNavProvider extends ChangeNotifier {
-  bool _isVisible = true;
+  int currentIndex = 0;
+  bool isVisible = true;
+  final PageController controller = PageController();
 
-  bool get isVisible => _isVisible;
-
-  void showNavBar() {
-    if (!_isVisible) {
-      _isVisible = true;
-      notifyListeners();
-    }
+  void setIndex(int index) {
+    currentIndex = index;
+    controller.jumpToPage(index);
+    notifyListeners();
   }
 
   void hideNavBar() {
-    if (_isVisible) {
-      _isVisible = false;
-      notifyListeners();
-    }
+    isVisible = false;
+    notifyListeners();
+  }
+
+  void showNavBar() {
+    isVisible = true;
+    notifyListeners();
   }
 }

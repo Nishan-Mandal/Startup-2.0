@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/presentation/screens/category_screen.dart';
+import 'package:startup_20/presentation/screens/chat_screen.dart';
+import 'package:startup_20/presentation/screens/contribute_screen.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
@@ -29,7 +32,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
     return Scaffold(
       extendBody: true,
       bottomNavigationBar: AnimatedContainer(
-        duration: const Duration(milliseconds: 400), // slower animation
+        duration: const Duration(milliseconds: 400),
         height: navProvider.isVisible ? kBottomNavigationBarHeight : 0,
         decoration: BoxDecoration(
           color: Colors.white,
@@ -79,26 +82,24 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                 ),
               ],
               hasNotch: true,
-              currentIndex: selected,
+              currentIndex: navProvider.currentIndex,
               onTap: (index) {
-                if (index == selected) return;
-                controller.jumpToPage(index);
-                setState(() {
-                  selected = index;
-                });
+                if (index == navProvider.currentIndex) return;
+                navProvider.setIndex(index); // ✅ use provider
               },
             ),
           ],
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endDocked,
       body: SafeArea(
         child: PageView(
-          controller: controller,
+          controller: navProvider.controller,
+          physics: const NeverScrollableScrollPhysics(), // lock swipe
           children: const [
             HomeScreen(),
-            Center(child: Text('Categories')),
-            Center(child: Text('Chat')),
+            CategoryScreen(),
+            ChatScreen(),
+            ContributionScreen()
           ],
         ),
       ),

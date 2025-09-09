@@ -3,6 +3,8 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
+import 'package:startup_20/presentation/screens/category_screen.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
@@ -145,43 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
           controller: _scrollController,
           slivers: [
             // 🔹 Top Bar + Location Selector
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [AppColors.pastelOrnage, AppColors.white],
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 15),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "Company",
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Row(children: [_notifications(), _profile()]),
-                          ],
-                        ),
-                        const SizedBox(height: 30),
-                        _locationSelector(),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            CommonWidgets.topSection(context),
 
             // 🔹 Pinned Search Bar
             SliverPersistentHeader(
@@ -237,41 +203,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             //Footer tagline outside padding, full width
-            SliverToBoxAdapter(child: _footerTagline()),
+            SliverToBoxAdapter(child: CommonWidgets.footerTagline()),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _notifications() {
-    return Container(
-      height: 30,
-      width: 30,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(Icons.notifications_outlined, size: 20),
-    );
-  }
-
-  Widget _profile() {
-    return IconButton(onPressed: () {}, icon: const Icon(Icons.person_outline));
-  }
-
-  Widget _locationSelector() {
-    return Row(
-      children: const [
-        Icon(Icons.location_on_outlined, color: Colors.orange),
-        SizedBox(width: 4),
-        Text(
-          "Haldia, West Bengal",
-          style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-        ),
-        Icon(Icons.arrow_drop_down),
-      ],
     );
   }
 
@@ -429,14 +364,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           GestureDetector(
             onTap: () {
-              Navigator.push(
+              // Switch to Category tab instead of pushing a new screen
+              Provider.of<BottomNavProvider>(
                 context,
-                MaterialPageRoute(
-                  builder:
-                      (context) =>
-                          ListingPage(title: heading, listings: listings),
-                ),
-              );
+                listen: false,
+              ).setIndex(1);
             },
             child: const Text(
               "See All >",
@@ -610,33 +542,34 @@ class _HomeScreenState extends State<HomeScreen> {
       itemBuilder: (context, index) {
         final service = listings[index];
         return GestureDetector(
-          onTap:
-              () {
-                Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ListingDetailScreen(
-                    title: "Fruit Shop",
-                    location: "City Center, Haldia",
-                    rating: 4.5,
-                    images: [
-                      "https://picsum.photos/200/300",
-                      "https://picsum.photos/201/300",
-                      "https://picsum.photos/202/300",
-                    ],
-                    sellerName: "Jone Doe",
-                    sellerRole: "Owner",
-                    sellerImage: "https://i.pravatar.cc/150?img=3",
-                    description: "Passage became common when Letraset revolutionized...",
-                    reviews: [
-                      Review(text: "Nice shop... love it", rating: 4.0),
-                      Review(text: "Great service!", rating: 5.0),
-                      Review(text: "Fresh fruits at good price", rating: 4.5),
-                    ],
-                  ),
-                ),
-              );
-              },
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (context) => ListingDetailScreen(
+                      title: "Fruit Shop",
+                      location: "City Center, Haldia",
+                      rating: 4.5,
+                      images: [
+                        "https://picsum.photos/200/300",
+                        "https://picsum.photos/201/300",
+                        "https://picsum.photos/202/300",
+                      ],
+                      sellerName: "Jone Doe",
+                      sellerRole: "Owner",
+                      sellerImage: "https://i.pravatar.cc/150?img=3",
+                      description:
+                          "Passage became common when Letraset revolutionized...",
+                      reviews: [
+                        Review(text: "Nice shop... love it", rating: 4.0),
+                        Review(text: "Great service!", rating: 5.0),
+                        Review(text: "Fresh fruits at good price", rating: 4.5),
+                      ],
+                    ),
+              ),
+            );
+          },
           child: Container(
             decoration: BoxDecoration(
               color: AppColors.white,
@@ -721,39 +654,6 @@ class _HomeScreenState extends State<HomeScreen> {
           color: Colors.orange.shade100,
           borderRadius: BorderRadius.all(Radius.circular(20)),
         ),
-      ),
-    );
-  }
-
-  Widget _footerTagline() {
-    return Container(
-      width: double.infinity,
-      color: Colors.grey.shade200,
-      padding: const EdgeInsets.symmetric(vertical: 50, horizontal: 25),
-      margin: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Shops \n& Services \nThat Matter to You!",
-            style: TextStyle(
-              fontSize: 30, // Bigger for impact
-              fontWeight: FontWeight.bold,
-              color: Colors.black54,
-            ),
-            textAlign: TextAlign.left,
-          ),
-          const SizedBox(height: 20),
-          Text(
-            "Crafted with ❤️ in West Bengal",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey.shade700,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
       ),
     );
   }
