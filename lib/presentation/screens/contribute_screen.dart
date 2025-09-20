@@ -1,7 +1,20 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:startup_20/presentation/screens/add_listing_screen.dart';
 
-class ContributionScreen extends StatelessWidget {
+class ContributionScreen extends StatefulWidget {
   const ContributionScreen({super.key});
+
+  @override
+  State<ContributionScreen> createState() => _ContributionScreenState();
+}
+
+class _ContributionScreenState extends State<ContributionScreen> {
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +117,14 @@ class ContributionScreen extends StatelessWidget {
                   title: "Add a Store/Service",
                   subtitle: "Help expand the community",
                   reward: "200",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AddListingScreen(),
+                      ),
+                    );
+                  },
                 ),
                 _contributionCard(
                   icon: Icons.group_add,
@@ -176,59 +197,60 @@ class ContributionScreen extends StatelessWidget {
     required String title,
     required String subtitle,
     String? reward,
+    VoidCallback? onTap,
   }) {
-    return Stack(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(icon, size: 40, color: Colors.black54),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: const TextStyle(color: Colors.black54, fontSize: 12),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-
-        // ✅ Reward Badge in Top Right of Card
-        if (reward != null)
-          Positioned(
-            right: 8,
-            top: 8,
-            child: Row(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Stack(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.handshake, color: Colors.amber, size: 16),
+                Icon(icon, size: 40, color: Colors.black54),
+                const SizedBox(height: 10),
                 Text(
-                  reward,
+                  title,
                   style: const TextStyle(
-                    fontSize: 12,
                     fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
           ),
-      ],
+          if (reward != null)
+            Positioned(
+              right: 8,
+              top: 8,
+              child: Row(
+                children: [
+                  const Icon(Icons.handshake, color: Colors.amber, size: 16),
+                  Text(
+                    reward,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 

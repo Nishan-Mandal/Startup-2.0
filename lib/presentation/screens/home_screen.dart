@@ -1,12 +1,15 @@
+import 'dart:math';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/data/models/home_model.dart';
+import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
-import 'package:startup_20/presentation/screens/category_screen.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
-import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -17,6 +20,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  late Future<HomeModel> _homeFuture;
+  late Future<List<Listing>> _featuredListings;
+  late Future<List<Listing>> _recommendedListings;
+  List<Listing> listings = [];
+
   int _currentBanner = 0;
   late ScrollController _scrollController;
 
@@ -24,6 +32,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _handleScroll();
+    _homeFuture = fetchHomeData();
+    _featuredListings = fetchFeaturedListings();
+    _recommendedListings = fetchRecommendedListings();
   }
 
   void _handleScroll() {
@@ -46,165 +57,273 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  final List<Map<String, String>> promoBanners = [
-    {
-      "title": "TofuNTreat",
-      "subtitle": "Order now & get 30% off",
-      "image": "https://picsum.photos/seed/picsum/150/150",
-    },
-    {
-      "title": "FreshVeggies",
-      "subtitle": "Healthy & Organic",
-      "image": "https://picsum.photos/seed/picsum/150/150",
-    },
-    {
-      "title": "Daily Essentials",
-      "subtitle": "Discount up to 20%",
-      "image": "https://picsum.photos/seed/picsum/150/150",
-    },
-  ];
+  Future<List<Listing>> fetchFeaturedListings() async {
+    final snapshot =
+        await FirebaseFirestore.instance
+            .collection("listings")
+            .where("tags", arrayContains: "featured")
+            .orderBy("createdAt", descending: true) // optional, latest first
+            .get();
 
-  final List<Map<String, dynamic>> categories = [
-    {"label": "Water", "icon": Icons.local_drink},
-    {"label": "Electrician", "icon": Icons.electrical_services},
-    {"label": "Beauty", "icon": Icons.content_cut},
-    {"label": "Gas", "icon": Icons.local_gas_station},
-    {"label": "Plumber", "icon": Icons.plumbing},
-    {"label": "Carpenter", "icon": Icons.chair_alt},
-    {"label": "Painter", "icon": Icons.format_paint},
-    {"label": "Cleaning", "icon": Icons.cleaning_services},
-    // {"label": "Laundry", "icon": Icons.local_laundry_service},
-    // {"label": "Groceries", "icon": Icons.shopping_basket},
-    // {"label": "Medicines", "icon": Icons.local_hospital},
-    // {"label": "Mechanic", "icon": Icons.car_repair},
-  ];
+    return snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
+  }
 
-  final List<Map<String, dynamic>> services = [
-    {
-      "title": "JalMate Water",
-      "subtitle": "2 Years ago",
-      "rating": 4.8,
-      "reviews": 200,
-      "image": "https://picsum.photos/seed/picsum/500/300",
-    },
-    {
-      "title": "Raj Gas Supply",
-      "subtitle": "5 Years ago",
-      "rating": 4.5,
-      "reviews": 150,
-      "image": "https://picsum.photos/seed/picsum/500/300",
-    },
-    {
-      "title": "JalMate Water",
-      "subtitle": "2 Years ago",
-      "rating": 4.8,
-      "reviews": 200,
-      "image": "https://picsum.photos/seed/picsum/500/300",
-    },
-    {
-      "title": "Raj Gas Supply",
-      "subtitle": "5 Years ago",
-      "rating": 4.5,
-      "reviews": 150,
-      "image": "https://picsum.photos/seed/picsum/500/300",
-    },
-    {
-      "title": "JalMate Water",
-      "subtitle": "2 Years ago",
-      "rating": 4.8,
-      "reviews": 200,
-      "image": "https://picsum.photos/seed/picsum/500/300",
-    },
-    {
-      "title": "Raj Gas Supply",
-      "subtitle": "5 Years ago",
-      "rating": 4.5,
-      "reviews": 150,
-      "image": "https://picsum.photos/seed/picsum/500/300",
-    },
-    {
-      "title": "JalMate Water",
-      "subtitle": "2 Years ago",
-      "rating": 4.8,
-      "reviews": 200,
-      "image": "https://picsum.photos/seed/picsum/500/300",
-    },
-    {
-      "title": "Raj Gas Supply",
-      "subtitle": "5 Years ago",
-      "rating": 4.5,
-      "reviews": 150,
-      "image": "https://picsum.photos/seed/picsum/500/300",
-    },
-  ];
+  Future<List<Listing>> fetchRecommendedListings() async {
+    final snapshot =
+        await FirebaseFirestore.instance
+            .collection("listings")
+            .where("tags", arrayContains: "recommended")
+            .orderBy("createdAt", descending: true) // optional, latest first
+            .get();
+
+    return snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
+  }
+
+  // 🔹 Fetch Firestore HomeScreen Data
+
+  Future<HomeModel> fetchHomeData() async {
+    final querySnapshot =
+        await FirebaseFirestore.instance
+            .collection("home")
+            .where("active", isEqualTo: true)
+            .limit(1)
+            .get();
+
+    if (querySnapshot.docs.isEmpty) {
+      throw Exception("No active home document found");
+    }
+
+    final doc = querySnapshot.docs.first;
+    final data = doc.data();
+
+    // ✅ Step 1: Get categories from home doc
+    List<String> categories = List<String>.from(data["listings"] ?? []);
+
+    // ✅ Step 2: Fetch listings matching categories
+    if (categories.isNotEmpty) {
+      final listingsQuery =
+          await FirebaseFirestore.instance
+              .collection("listings")
+              .where("category", whereIn: categories)
+              .get();
+
+      listings =
+          listingsQuery.docs.map((e) => Listing.fromJson(e.data())).toList();
+    }
+
+    return HomeModel.fromJson(doc.data());
+  }
+
+  /// Sample Data Generator
+  Future<void> generateSampleListings() async {
+    final firestore = FirebaseFirestore.instance;
+    final random = Random();
+    // 🔹 Define 10 categories
+    final categories = [
+      "Restaurant",
+      "Electrician",
+      "Plumber",
+      "Grocery",
+      "Doctor",
+      "Salon",
+      "Gym",
+      "Pharmacy",
+      "Cafe",
+      "Mechanic",
+    ];
+
+    // 🔹 For each category, create 10 sample listings
+    for (final category in categories) {
+      for (int i = 1; i <= 10; i++) {
+        final docRef = firestore.collection("listings").doc();
+
+        final data = {
+          "listingId": docRef.id,
+          "contributionId": "contrib_${category}_$i",
+          "name": "$category Service $i",
+          "address": "123 Main Street, City $i",
+          "description": "Best $category service in town #$i",
+          "geo": {"lat": 37.7749 + (i * 0.001), "lng": -122.4194 + (i * 0.001)},
+          "phone": "+91 98765432$i",
+          "category": category,
+          "tags": ["$category", "Service", "Demo"],
+          "addedBy": "system_admin",
+          "isClaimed": false,
+          "ownerId": null,
+          "claimStatus": "unclaimed",
+          "verifiedBy": null,
+          "createdAt": FieldValue.serverTimestamp(),
+          "updatedAt": FieldValue.serverTimestamp(),
+          "reviews": random.nextInt(500),
+          "rating": double.parse(
+            (1 + random.nextDouble() * 4).toStringAsFixed(
+              1,
+            ), // ensures 1.0 → 5.0 with 1 decimal
+          ),
+          "images": [
+            {
+              "fileId": "file_${category}_$i-1",
+              "fullUrl": "https://picsum.photos/200",
+              "thumbUrl": "https://picsum.photos/200",
+            },
+            {
+              "fileId": "file_${category}_$i-2",
+              "fullUrl": "https://picsum.photos/200",
+              "thumbUrl": "https://picsum.photos/200",
+            },
+          ],
+        };
+
+        // 🔹 Write to Firestore
+        await docRef.set(data);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
       body: SafeArea(
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            // 🔹 Top Bar + Location Selector
-            CommonWidgets.topSection(context),
+        child: FutureBuilder<HomeModel>(
+          future: _homeFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text("Error: ${snapshot.error}"));
+            }
 
-            // 🔹 Pinned Search Bar
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: SearchBarHeader(child: _searchBar()),
-            ),
+            if (!snapshot.hasData) {
+              return const Center(child: Text("No data found"));
+            }
 
-            // 🔹 Scrollable Content
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  _promoBanner(),
-                  const SizedBox(height: 8),
-                  _dotsIndicator(),
-                  const SizedBox(height: 20),
-                  _headings('Popular Categories', services),
-                  const SizedBox(height: 12),
-                  _categoriesTab(),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: EdgeInsets.only(bottom: 30, top: 20),
-                    color: Colors.grey.shade100,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        _featuredAdsHeading(),
-                        const SizedBox(height: 12),
-                        _featuredAds(),
+            final homeData = snapshot.data!;
+
+            return CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                // 🔹 Top Bar + Location Selector
+                CommonWidgets.topSection(context),
+
+                // 🔹 Pinned Search Bar
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: SearchBarHeader(child: _searchBar()),
+                ),
+
+                // 🔹 Scrollable Content
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _promoBanner(homeData.promoBanners),
+                      const SizedBox(height: 8),
+                      _dotsIndicator(homeData.promoBanners),
+                      const SizedBox(height: 20),
+                      _headings('Popular Categories'),
+                      const SizedBox(height: 12),
+                      _categoriesTab(homeData.categories),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: EdgeInsets.only(bottom: 30, top: 20),
+                        color: Colors.grey.shade100,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            _featuredAdsHeading(),
+                            const SizedBox(height: 12),
+                            FutureBuilder<List<Listing>>(
+                              future: _featuredListings,
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(),
+                                  );
+                                }
+                                if (snapshot.hasError) {
+                                  return Text("Error: ${snapshot.error}");
+                                }
+
+                                final featuredListings = snapshot.data ?? [];
+
+                                if (featuredListings.isEmpty) {
+                                  return const Text(
+                                    "No featured listings available",
+                                  );
+                                }
+
+                                return _featuredAds(featuredListings);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _headings('Recommended'),
+                      const SizedBox(height: 20),
+                      FutureBuilder<List<Listing>>(
+                        future: _recommendedListings,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+                          if (snapshot.hasError) {
+                            return Text("Error: ${snapshot.error}");
+                          }
+
+                          final featuredListings = snapshot.data ?? [];
+
+                          if (featuredListings.isEmpty) {
+                            return const Text(
+                              "No recommended listings available",
+                            );
+                          }
+
+                          return _listingsData(featuredListings);
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      _bannerData(homeData.banners[0]),
+
+                      for (
+                        int index = 0;
+                        index < homeData.listings.length;
+                        index++
+                      ) ...[
+                        const SizedBox(height: 20),
+                        _headings(homeData.listings[index]),
+                        const SizedBox(height: 20),
+                        _listingsData(
+                          (listings
+                                  .where(
+                                    (listing) =>
+                                        listing.category ==
+                                        homeData.listings[index],
+                                  )
+                                  .toList()
+                                ..sort((a, b) => b.rating.compareTo(a.rating)))
+                              .take(6)
+                              .toList(),
+                        ),
+                        const SizedBox(height: 20),
+                        _bannerData(homeData.banners[0]),
                       ],
-                    ),
+                    ]),
                   ),
-                  const SizedBox(height: 20),
-                  _headings("Recommended", services),
-                  const SizedBox(height: 20),
-                  _listingsData(services),
-                  const SizedBox(height: 20),
-                  _bannerData(''),
-                  const SizedBox(height: 20),
-                  _headings("Rentals", services),
-                  const SizedBox(height: 20),
-                  _listingsData(services),
-                  const SizedBox(height: 20),
-                  _bannerData(''),
-                  const SizedBox(height: 20),
-                  _headings("Stores", services),
-                  const SizedBox(height: 20),
-                  _listingsData(services),
-                  const SizedBox(height: 20),
-                  _bannerData(''),
-                ]),
-              ),
-            ),
-            //Footer tagline outside padding, full width
-            SliverToBoxAdapter(child: CommonWidgets.footerTagline()),
-          ],
+                ),
+
+                //Footer tagline outside padding, full width
+                SliverToBoxAdapter(child: CommonWidgets.footerTagline()),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -233,85 +352,24 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _promoBanner() {
+  Widget _promoBanner(List<dynamic> promoBanners) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15),
       child: CarouselSlider.builder(
         itemCount: promoBanners.length,
         itemBuilder: (context, index, realIndex) {
-          final banner = promoBanners[index];
-          return Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade300,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.white,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          "Popular",
-                          style: TextStyle(color: Colors.black, fontSize: 12),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        banner["title"]!,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      // Text(
-                      //   banner["subtitle"]!,
-                      //   style: const TextStyle(fontSize: 14),
-                      // ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text("Order Now"),
-                      ),
-                    ],
+          final imageUrl = promoBanners[index];
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.network(
+              imageUrl,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder:
+                  (_, __, ___) => Container(
+                    color: Colors.grey.shade300,
+                    child: const Icon(Icons.image, color: Colors.grey),
                   ),
-                ),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    banner["image"]!,
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
-                    errorBuilder:
-                        (_, __, ___) => Container(
-                          width: 100,
-                          height: 100,
-                          color: Colors.grey.shade300,
-                          child: const Icon(Icons.image, color: Colors.grey),
-                        ),
-                  ),
-                ),
-              ],
             ),
           );
         },
@@ -331,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _dotsIndicator() {
+  Widget _dotsIndicator(List<dynamic> promoBanners) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children:
@@ -352,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _headings(String heading, List<Map<String, dynamic>> listings) {
+  Widget _headings(String heading) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15),
       child: Row(
@@ -380,23 +438,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _categoriesTab() {
+  Widget _categoriesTab(List<dynamic> categories) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: categories.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4, // 4 items per row
-        mainAxisSpacing: 16, // spacing between rows
-        crossAxisSpacing: 16, // spacing between columns
-        childAspectRatio: 0.8, // taller cells to fit icon + label
+        crossAxisCount: 4,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 0.8,
       ),
       itemBuilder: (context, index) {
         final category = categories[index];
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // 🔹 Icon Box
             Container(
               height: 60,
               width: 60,
@@ -405,12 +462,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.grey.shade300),
               ),
-              child: Icon(category["icon"], color: Colors.black54, size: 28),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16), // match container
+                child: Image.network(
+                  category.imageUrl, // 🔹 replace with your image URL
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(
+                      Icons.broken_image,
+                      color: Colors.grey,
+                      size: 28,
+                    ); // fallback
+                  },
+                ),
+              ),
             ),
             const SizedBox(height: 6),
-            // 🔹 Label outside box
             Text(
-              category["label"],
+              category.category,
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -441,18 +510,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _featuredAds() {
+  Widget _featuredAds(List<Listing> listings) {
     return SizedBox(
-      height: 150, // shorter height
+      height: 150,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: services.length,
+        itemCount: listings.length,
         itemBuilder: (context, index) {
-          final service = services[index];
+          final listing = listings[index];
           return Container(
-            width: 280, // wider card for rectangular look
+            width: 280,
             margin: const EdgeInsets.only(left: 5, right: 8),
-            padding: EdgeInsets.all(5),
+            padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
               color: AppColors.white,
               borderRadius: BorderRadius.circular(16),
@@ -467,7 +536,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     left: Radius.circular(16),
                   ),
                   child: Image.network(
-                    service["image"],
+                    listing.images.isNotEmpty
+                        ? listing.images.first.thumbUrl
+                        : "https://via.placeholder.com/150",
                     width: 140,
                     height: 180,
                     fit: BoxFit.cover,
@@ -483,7 +554,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          service["title"],
+                          listing.name,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
@@ -493,7 +564,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          service["subtitle"],
+                          listing.category,
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
@@ -510,7 +581,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               size: 16,
                             ),
                             Text(
-                              "${service["rating"]} (${service["reviews"]})",
+                              "${listing.rating} (${listing.reviews})",
                               style: const TextStyle(fontSize: 12),
                             ),
                           ],
@@ -527,12 +598,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _listingsData(List<Map<String, dynamic>> listings) {
+  Widget _listingsData(List<Listing> listings) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: listings.length,
-      padding: EdgeInsets.symmetric(horizontal: 15),
+      padding: const EdgeInsets.symmetric(horizontal: 15),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 12,
@@ -540,7 +611,8 @@ class _HomeScreenState extends State<HomeScreen> {
         childAspectRatio: 3 / 3.5,
       ),
       itemBuilder: (context, index) {
-        final service = listings[index];
+        final listing = listings[index];
+
         return GestureDetector(
           onTap: () {
             Navigator.push(
@@ -548,23 +620,21 @@ class _HomeScreenState extends State<HomeScreen> {
               MaterialPageRoute(
                 builder:
                     (context) => ListingDetailScreen(
-                      title: "Fruit Shop",
-                      location: "City Center, Haldia",
-                      rating: 4.5,
-                      images: [
-                        "https://picsum.photos/200/300",
-                        "https://picsum.photos/201/300",
-                        "https://picsum.photos/202/300",
-                      ],
-                      sellerName: "Jone Doe",
-                      sellerRole: "Owner",
-                      sellerImage: "https://i.pravatar.cc/150?img=3",
-                      description:
-                          "Passage became common when Letraset revolutionized...",
+                      title: listing.name,
+                      location: listing.address,
+                      rating: listing.rating,
+                      images: listing.images.map((img) => img.fullUrl).toList(),
+                      sellerName:
+                          "Unknown Seller", // 🔹 replace if you have seller info
+                      sellerRole: listing.isClaimed ? "Owner" : "Contributor",
+                      sellerImage:
+                          listing.images.isNotEmpty
+                              ? listing.images.first.thumbUrl
+                              : "https://i.pravatar.cc/150", // fallback
+                      description: listing.description,
                       reviews: [
-                        Review(text: "Nice shop... love it", rating: 4.0),
-                        Review(text: "Great service!", rating: 5.0),
-                        Review(text: "Fresh fruits at good price", rating: 4.5),
+                        // 🔹 Dummy reviews — replace with your Review model if available
+                        Review(text: "Great place!", rating: listing.rating),
                       ],
                     ),
               ),
@@ -590,7 +660,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     top: Radius.circular(16),
                   ),
                   child: Image.network(
-                    service["image"],
+                    listing.images.isNotEmpty
+                        ? listing.images.first.fullUrl
+                        : "https://via.placeholder.com/150", // fallback
                     height: 100,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -602,7 +674,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        service["title"],
+                        listing.name,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -610,11 +682,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        service["subtitle"],
+                        listing.address,
                         style: const TextStyle(
                           fontSize: 12,
                           color: Colors.grey,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Row(
@@ -625,7 +699,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             size: 16,
                           ),
                           Text(
-                            "${service["rating"]} (${service["reviews"]})",
+                            "${listing.rating.toStringAsFixed(1)} (${listing.reviews})",
                             style: const TextStyle(fontSize: 12),
                           ),
                         ],
@@ -643,16 +717,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _bannerData(String imageLink) {
     return Container(
-      padding: EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       width: double.infinity,
       height: 250,
       color: Colors.grey.shade100,
-      child: Container(
-        height: double.infinity,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.orange.shade100,
-          borderRadius: BorderRadius.all(Radius.circular(20)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Image.network(
+          imageLink,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return const Icon(Icons.broken_image, color: Colors.grey, size: 28);
+          },
         ),
       ),
     );
