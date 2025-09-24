@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
 
 class ContributionScreen extends StatefulWidget {
@@ -19,19 +20,19 @@ class _ContributionScreenState extends State<ContributionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.WHITE,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.WHITE,
         elevation: 0,
         centerTitle: false,
         title: const Text(
           "Your Contribution",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.BLACK),
         ),
         actions: [
           Row(
             children: const [
-              Icon(Icons.handshake, color: Colors.amber),
+              Icon(Icons.handshake, color: AppColors.THEME_COLOR),
               SizedBox(width: 4),
               Text(
                 "100",
@@ -51,7 +52,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade200,
+                color: AppColors.GREY_SHADE_300,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -59,7 +60,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                 children: [
                   Row(
                     children: const [
-                      Icon(Icons.handshake, color: Colors.amber, size: 32),
+                      Icon(Icons.handshake, color: AppColors.THEME_COLOR, size: 32),
                       SizedBox(width: 12),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,8 +86,8 @@ class _ContributionScreenState extends State<ContributionScreen> {
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber,
-                      foregroundColor: Colors.black,
+                      backgroundColor: AppColors.THEME_COLOR,
+                      foregroundColor: AppColors.BLACK,
                       elevation: 3,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -147,7 +148,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade200,
+                color: AppColors.GREY_SHADE_300,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -207,13 +208,13 @@ class _ContributionScreenState extends State<ContributionScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: AppColors.GREY_SHADE_100,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 40, color: Colors.black54),
+                Icon(icon, size: 40, color: AppColors.BLACK_54),
                 const SizedBox(height: 10),
                 Text(
                   title,
@@ -226,7 +227,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  style: const TextStyle(color: AppColors.BLACK_54, fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -238,7 +239,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
               top: 8,
               child: Row(
                 children: [
-                  const Icon(Icons.handshake, color: Colors.amber, size: 16),
+                  const Icon(Icons.handshake, color: AppColors.THEME_COLOR, size: 16),
                   Text(
                     reward,
                     style: const TextStyle(

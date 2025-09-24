@@ -1,7 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
-import 'package:startup_20/data/models/listing_model.dart'; // <-- where Listing, Geo, ImageFile are defined
+import 'package:startup_20/data/models/listing_model.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:startup_20/presentation/common_methods/common_methods.dart';
+import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
+import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 
 class ListingPage extends StatefulWidget {
   final String title;
@@ -12,33 +16,34 @@ class ListingPage extends StatefulWidget {
 }
 
 class _ListingPageState extends State<ListingPage> {
+  late List<Listing> listings;
   /// 🔹 Fetch listings from Firestore using the Listing model
   Future<List<Listing>> fetchListings() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection("listings")
-        .where("category", isEqualTo: widget.title)
-        .orderBy("createdAt", descending: true)
-        .get();
+    final snapshot =
+        await FirebaseFirestore.instance
+            .collection("listings")
+            .where("category", isEqualTo: widget.title)
+            .orderBy("createdAt", descending: true)
+            .get();
 
-    return snapshot.docs
-        .map((doc) => Listing.fromJson(doc.data()))
-        .toList();
+    listings = snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
+    return listings;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: AppColors.WHITE,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(60),
         child: SafeArea(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.WHITE,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black12,
+                  color: AppColors.BLACK_12,
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -83,7 +88,18 @@ class _ListingPageState extends State<ListingPage> {
         future: fetchListings(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return GridView.builder(
+              padding: const EdgeInsets.all(15),
+              itemCount: 6, // number of shimmer cards you want
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 3 / 3.5,
+              ),
+              itemBuilder:
+                  (context, index) => CommonWidgets.shimmerlistingCard(),
+            );
           }
           if (snapshot.hasError) {
             debugPrint("Error: ${snapshot.error}");
@@ -103,95 +119,16 @@ class _ListingPageState extends State<ListingPage> {
               crossAxisCount: 2,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: 3 / 3.5,
+              childAspectRatio: 3 / 3.8,
             ),
             itemBuilder: (context, index) {
               final listing = listings[index];
 
-              // ✅ Get image (thumbUrl preferred, fallback to fullUrl or placeholder)
-              final imageUrl = listing.images.isNotEmpty
-                  ? (listing.images.first.thumbUrl.isNotEmpty
-                      ? listing.images.first.thumbUrl
-                      : listing.images.first.fullUrl)
-                  : "https://via.placeholder.com/150";
-
-              return Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 6,
-                      offset: const Offset(1, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 🔹 Image
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(16),
-                      ),
-                      child: Image.network(
-                        imageUrl,
-                        height: 100,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          height: 100,
-                          width: double.infinity,
-                          color: Colors.grey.shade300,
-                          child: const Icon(Icons.image_not_supported,
-                              color: Colors.grey),
-                        ),
-                      ),
-                    ),
-
-                    // 🔹 Info
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            listing.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            listing.category,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.star,
-                                color: Colors.orange,
-                                size: 16,
-                              ),
-                              Text(
-                                '${listing.rating} (${listing.reviews})',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              return GestureDetector(
+                onTap: () {
+                  CommonMethods.navigateToListingDetailScreen(context, listing, listings);
+                },
+                child: CommonWidgets.listingCard(listing),
               );
             },
           );

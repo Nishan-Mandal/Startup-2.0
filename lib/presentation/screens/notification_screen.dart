@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:startup_20/core/constants/app_colors.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -44,15 +45,15 @@ class NotificationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: AppColors.GREY_SHADE_100,
       appBar: AppBar(
-        title: const Text("Notifications"),
+        title: const Text("Notifications", style: TextStyle(color: AppColors.WHITE),),
         centerTitle: true,
-        backgroundColor: Colors.orange,
+        backgroundColor: AppColors.THEME_COLOR,
         actions: [
           IconButton(
             onPressed: () {},
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.more_vert, color: AppColors.WHITE,),
           ),
         ],
       ),
@@ -82,7 +83,7 @@ class NotificationsScreen extends StatelessWidget {
               subtitle: Text(notif["message"]),
               trailing: Text(
                 notif["time"],
-                style: const TextStyle(fontSize: 12, color: Colors.black54),
+                style: const TextStyle(fontSize: 12, color: AppColors.BLACK_54),
               ),
               onTap: () {
                 // handle navigation if needed

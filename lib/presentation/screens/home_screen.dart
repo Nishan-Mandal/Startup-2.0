@@ -1,15 +1,20 @@
 import 'dart:math';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/home_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
+import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
+import 'package:startup_20/presentation/screens/listing_screen.dart';
+import 'package:startup_20/presentation/screens/search_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -183,171 +188,158 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.white,
-      body: SafeArea(
-        child: FutureBuilder<HomeModel>(
-          future: _homeFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return Center(child: Text("Error: ${snapshot.error}"));
-            }
+      backgroundColor: AppColors.GREY_SHADE_50,
+      body: FutureBuilder<HomeModel>(
+        future: _homeFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return CommonWidgets.shimmerHomeScreen();
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text("Error: ${snapshot.error}"));
+          }
 
-            if (!snapshot.hasData) {
-              return const Center(child: Text("No data found"));
-            }
+          if (!snapshot.hasData) {
+            return const Center(child: Text("No data found"));
+          }
 
-            final homeData = snapshot.data!;
+          final homeData = snapshot.data!;
 
-            return CustomScrollView(
-              controller: _scrollController,
-              slivers: [
-                // 🔹 Top Bar + Location Selector
-                CommonWidgets.topSection(context),
+          return CustomScrollView(
+            controller: _scrollController,
+            slivers: [
+              // 🔹 Top Bar + Location Selector
+              CommonWidgets.topSection(context),
 
-                // 🔹 Pinned Search Bar
-                SliverPersistentHeader(
-                  pinned: true,
-                  delegate: SearchBarHeader(child: _searchBar()),
-                ),
+              // 🔹 Pinned Search Bar
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: SearchBarHeader(child: CommonWidgets.searchBar()),
+              ),
 
-                // 🔹 Scrollable Content
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _promoBanner(homeData.promoBanners),
-                      const SizedBox(height: 8),
-                      _dotsIndicator(homeData.promoBanners),
-                      const SizedBox(height: 20),
-                      _headings('Popular Categories'),
-                      const SizedBox(height: 12),
-                      _categoriesTab(homeData.categories),
-                      const SizedBox(height: 20),
-                      Container(
-                        padding: EdgeInsets.only(bottom: 30, top: 20),
-                        color: Colors.grey.shade100,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            _featuredAdsHeading(),
-                            const SizedBox(height: 12),
-                            FutureBuilder<List<Listing>>(
-                              future: _featuredListings,
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState ==
-                                    ConnectionState.waiting) {
-                                  return const Center(
-                                    child: CircularProgressIndicator(),
-                                  );
-                                }
-                                if (snapshot.hasError) {
-                                  return Text("Error: ${snapshot.error}");
-                                }
+              // 🔹 Scrollable Content
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _promoBanner(homeData.promoBanners),
+                    const SizedBox(height: 8),
+                    _dotsIndicator(homeData.promoBanners),
+                    const SizedBox(height: 20),
+                    _headings('Popular Categories'),
+                    const SizedBox(height: 12),
+                    _categoriesTab(homeData.categories),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: EdgeInsets.only(bottom: 30, top: 20),
+                      color: AppColors.GREY_SHADE_300,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          _featuredAdsHeading(),
+                          const SizedBox(height: 12),
+                          FutureBuilder<List<Listing>>(
+                            future: _featuredListings,
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                  child: CircularProgressIndicator(),
+                                );
+                              }
+                              if (snapshot.hasError) {
+                                return Text("Error: ${snapshot.error}");
+                              }
+                              final featuredListings = snapshot.data ?? [];
 
-                                final featuredListings = snapshot.data ?? [];
+                              if (featuredListings.isEmpty) {
+                                return const Text(
+                                  "No featured listings available",
+                                );
+                              }
 
-                                if (featuredListings.isEmpty) {
-                                  return const Text(
-                                    "No featured listings available",
-                                  );
-                                }
-
-                                return _featuredAds(featuredListings);
-                              },
-                            ),
-                          ],
-                        ),
+                              return _featuredAds(featuredListings);
+                            },
+                          ),
+                        ],
                       ),
+                    ),
+                    const SizedBox(height: 20),
+                    _headings('Recommended'),
+                    const SizedBox(height: 20),
+                    FutureBuilder<List<Listing>>(
+                      future: _recommendedListings,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: 6,
+                            padding: const EdgeInsets.symmetric(horizontal: 15),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 3 / 3.8,
+                                ),
+                            itemBuilder:
+                                (context, index) =>
+                                    CommonWidgets.shimmerlistingCard(),
+                          );
+                        }
+                        if (snapshot.hasError) {
+                          return Text("Error: ${snapshot.error}");
+                        }
+
+                        final featuredListings = snapshot.data ?? [];
+
+                        if (featuredListings.isEmpty) {
+                          return const Text(
+                            "No recommended listings available",
+                          );
+                        }
+
+                        return _listingsData(featuredListings);
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    _bannerData(homeData.banners[0]),
+
+                    for (
+                      int index = 0;
+                      index < homeData.listings.length;
+                      index++
+                    ) ...[
                       const SizedBox(height: 20),
-                      _headings('Recommended'),
+                      _headings(homeData.listings[index]),
                       const SizedBox(height: 20),
-                      FutureBuilder<List<Listing>>(
-                        future: _recommendedListings,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          }
-                          if (snapshot.hasError) {
-                            return Text("Error: ${snapshot.error}");
-                          }
-
-                          final featuredListings = snapshot.data ?? [];
-
-                          if (featuredListings.isEmpty) {
-                            return const Text(
-                              "No recommended listings available",
-                            );
-                          }
-
-                          return _listingsData(featuredListings);
-                        },
+                      _listingsData(
+                        (listings
+                                .where(
+                                  (listing) =>
+                                      listing.category ==
+                                      homeData.listings[index],
+                                )
+                                .toList()
+                              ..sort((a, b) => b.rating.compareTo(a.rating)))
+                            .take(6)
+                            .toList(),
                       ),
                       const SizedBox(height: 20),
                       _bannerData(homeData.banners[0]),
-
-                      for (
-                        int index = 0;
-                        index < homeData.listings.length;
-                        index++
-                      ) ...[
-                        const SizedBox(height: 20),
-                        _headings(homeData.listings[index]),
-                        const SizedBox(height: 20),
-                        _listingsData(
-                          (listings
-                                  .where(
-                                    (listing) =>
-                                        listing.category ==
-                                        homeData.listings[index],
-                                  )
-                                  .toList()
-                                ..sort((a, b) => b.rating.compareTo(a.rating)))
-                              .take(6)
-                              .toList(),
-                        ),
-                        const SizedBox(height: 20),
-                        _bannerData(homeData.banners[0]),
-                      ],
-                    ]),
-                  ),
+                    ],
+                  ]),
                 ),
+              ),
 
-                //Footer tagline outside padding, full width
-                SliverToBoxAdapter(child: CommonWidgets.footerTagline()),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _searchBar() {
-    return TextField(
-      decoration: InputDecoration(
-        hintText: "What service do you need?",
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: Container(
-          margin: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: Colors.orange,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(Icons.tune, color: AppColors.white),
-        ),
-        filled: true,
-        fillColor: Colors.grey.shade100,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
+              //Footer tagline outside padding, full width
+              SliverToBoxAdapter(child: CommonWidgets.footerTagline()),
+            ],
+          );
+        },
       ),
     );
   }
@@ -361,12 +353,23 @@ class _HomeScreenState extends State<HomeScreen> {
           final imageUrl = promoBanners[index];
           return ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: Image.network(
-              imageUrl,
+            child: CachedNetworkImage(
+              imageUrl: imageUrl,
               width: double.infinity,
               fit: BoxFit.cover,
-              errorBuilder:
-                  (_, __, ___) => Container(
+              placeholder: (context, url) {
+                return Shimmer.fromColors(
+                  baseColor: AppColors.GREY_SHADE_300,
+                  highlightColor: AppColors.GREY_SHADE_100,
+                  child: Container(
+                    width: double.infinity,
+                    height: 180,
+                    color: Colors.white,
+                  ),
+                );
+              },
+              errorWidget:
+                  (context, url, error) => Container(
                     color: Colors.grey.shade300,
                     child: const Icon(Icons.image, color: Colors.grey),
                   ),
@@ -402,8 +405,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: BoxShape.circle,
                 color:
                     _currentBanner == entry.key
-                        ? Colors.orange
-                        : Colors.grey.shade300,
+                        ? AppColors.THEME_COLOR
+                        : AppColors.GREY_SHADE_300,
               ),
             );
           }).toList(),
@@ -422,15 +425,23 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           GestureDetector(
             onTap: () {
-              // Switch to Category tab instead of pushing a new screen
-              Provider.of<BottomNavProvider>(
-                context,
-                listen: false,
-              ).setIndex(1);
+              if (heading == 'Popular Categories') {
+                Provider.of<BottomNavProvider>(
+                  context,
+                  listen: false,
+                ).setIndex(1);
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ListingPage(title: heading),
+                  ),
+                );
+              }
             },
             child: const Text(
               "See All >",
-              style: TextStyle(color: Colors.orange),
+              style: TextStyle(color: AppColors.THEME_COLOR),
             ),
           ),
         ],
@@ -451,45 +462,68 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       itemBuilder: (context, index) {
         final category = categories[index];
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              height: 60,
-              width: 60,
-              decoration: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade300),
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ListingPage(title: category.category),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16), // match container
-                child: Image.network(
-                  category.imageUrl, // 🔹 replace with your image URL
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(
-                      Icons.broken_image,
-                      color: Colors.grey,
-                      size: 28,
-                    ); // fallback
-                  },
+            );
+          },
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                height: 60,
+                width: 60,
+                padding: EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.GREY_SHADE_50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.GREY_SHADE_300),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10), // match container
+                  child: CachedNetworkImage(
+                    imageUrl:
+                        category.imageUrl, // 🔹 replace with your image URL
+                    fit: BoxFit.cover,
+
+                    placeholder: (context, url) {
+                      return Shimmer.fromColors(
+                        baseColor: AppColors.GREY_SHADE_300,
+                        highlightColor: AppColors.GREY_SHADE_100,
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          color: Colors.white,
+                        ),
+                      );
+                    },
+                    errorWidget:
+                        (context, url, error) => const Icon(
+                          Icons.broken_image,
+                          color: Colors.grey,
+                          size: 28,
+                        ),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              category.category,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Colors.black,
+              const SizedBox(height: 6),
+              Text(
+                category.category,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.BLACK,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -518,79 +552,103 @@ class _HomeScreenState extends State<HomeScreen> {
         itemCount: listings.length,
         itemBuilder: (context, index) {
           final listing = listings[index];
-          return Container(
-            width: 280,
-            margin: const EdgeInsets.only(left: 5, right: 8),
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade300, width: 1),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 🔹 Left Side Image
-                ClipRRect(
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(16),
-                  ),
-                  child: Image.network(
-                    listing.images.isNotEmpty
-                        ? listing.images.first.thumbUrl
-                        : "https://via.placeholder.com/150",
-                    width: 140,
-                    height: 180,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-
-                // 🔹 Right Side Details
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          listing.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+          return GestureDetector(
+            onTap: () {
+              CommonMethods.navigateToListingDetailScreen(context, listing, listings);
+            },
+            child: Container(
+              width: 280,
+              margin: const EdgeInsets.only(left: 5, right: 8),
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: AppColors.WHITE,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.GREY_SHADE_300, width: 1),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 🔹 Left Side Image
+                  ClipRRect(
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(16),
+                    ),
+                    child: CachedNetworkImage(
+                      imageUrl:
+                          listing.images.isNotEmpty
+                              ? listing.images.first.thumbUrl
+                              : "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/static%2FImage_Placeholder.jpg?alt=media&token=22a0ec73-6352-4885-bfaf-c485750af28f",
+            
+                      placeholder: (context, url) {
+                        return Shimmer.fromColors(
+                          baseColor: Colors.grey.shade300,
+                          highlightColor: Colors.grey.shade100,
+                          child: Container(
+                            width: double.infinity,
+                            height: double.infinity,
+                            color: Colors.white,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          listing.category,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
+                        );
+                      },
+            
+                      errorWidget:
+                          (context, url, error) => Container(
+                            color: Colors.grey.shade300,
+                            child: const Icon(Icons.image, color: Colors.grey),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.star,
-                              color: Colors.orange,
-                              size: 16,
-                            ),
-                            Text(
-                              "${listing.rating} (${listing.reviews})",
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ],
+                      width: 140,
+                      height: 180,
+                      fit: BoxFit.cover,
                     ),
                   ),
-                ),
-              ],
+            
+                  // 🔹 Right Side Details
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            listing.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            listing.category,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.GREY,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.star,
+                                color: AppColors.THEME_COLOR,
+                                size: 16,
+                              ),
+                              Text(
+                                "${listing.rating} (${listing.reviews})",
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -608,108 +666,16 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 3 / 3.5,
+        childAspectRatio: 3 / 3.8,
       ),
       itemBuilder: (context, index) {
         final listing = listings[index];
 
         return GestureDetector(
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder:
-                    (context) => ListingDetailScreen(
-                      title: listing.name,
-                      location: listing.address,
-                      rating: listing.rating,
-                      images: listing.images.map((img) => img.fullUrl).toList(),
-                      sellerName:
-                          "Unknown Seller", // 🔹 replace if you have seller info
-                      sellerRole: listing.isClaimed ? "Owner" : "Contributor",
-                      sellerImage:
-                          listing.images.isNotEmpty
-                              ? listing.images.first.thumbUrl
-                              : "https://i.pravatar.cc/150", // fallback
-                      description: listing.description,
-                      reviews: [
-                        // 🔹 Dummy reviews — replace with your Review model if available
-                        Review(text: "Great place!", rating: listing.rating),
-                      ],
-                    ),
-              ),
-            );
+            CommonMethods.navigateToListingDetailScreen(context, listing, listings);
           },
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 6,
-                  offset: const Offset(1, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                  child: Image.network(
-                    listing.images.isNotEmpty
-                        ? listing.images.first.fullUrl
-                        : "https://via.placeholder.com/150", // fallback
-                    height: 100,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        listing.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        listing.address,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.star,
-                            color: Colors.orange,
-                            size: 16,
-                          ),
-                          Text(
-                            "${listing.rating.toStringAsFixed(1)} (${listing.reviews})",
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          child: CommonWidgets.listingCard(listing),
         );
       },
     );
@@ -720,15 +686,30 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.all(20),
       width: double.infinity,
       height: 250,
-      color: Colors.grey.shade100,
+      color: AppColors.GREY_SHADE_300,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: Image.network(
-          imageLink,
+        child: CachedNetworkImage(
+          imageUrl: imageLink,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return const Icon(Icons.broken_image, color: Colors.grey, size: 28);
+
+          placeholder: (context, url) {
+            return Shimmer.fromColors(
+              baseColor: Colors.grey.shade300,
+              highlightColor: Colors.grey.shade100,
+              child: Container(
+                width: double.infinity,
+                height: double.infinity,
+                color: Colors.white,
+              ),
+            );
           },
+
+          errorWidget:
+              (context, url, error) => Container(
+                color: Colors.grey.shade300,
+                child: const Icon(Icons.image, color: Colors.grey),
+              ),
         ),
       ),
     );
@@ -747,16 +728,24 @@ class SearchBarHeader extends SliverPersistentHeaderDelegate {
   ) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white, // keeps background same
+        color: AppColors.WHITE, // keeps background same
         border: Border(
           bottom: BorderSide(
-            color: Colors.grey.shade300, // line color
+            color: AppColors.GREY_SHADE_300, // line color
             width: 1.0, // line thickness
           ),
         ),
       ),
       padding: const EdgeInsets.only(left: 10, right: 10, top: 5, bottom: 20),
-      child: child,
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => SearchScreen()),
+          );
+        },
+        child: child,
+      ),
     );
   }
 

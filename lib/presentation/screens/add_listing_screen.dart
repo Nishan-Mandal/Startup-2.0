@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -290,7 +291,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                 child: Container(
                   height: 150,
                   decoration: BoxDecoration(
-                    color: Colors.grey[200],
+                    color: AppColors.GREY_SHADE_300,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Center(
@@ -300,7 +301,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                         Icon(
                           Icons.cloud_upload,
                           size: 50,
-                          color: Colors.black54,
+                          color: AppColors.BLACK_54,
                         ),
                         SizedBox(height: 8),
                         Text("Tap to upload image"),
@@ -345,13 +346,13 @@ class _AddListingScreenState extends State<AddListingScreen> {
                               },
                               child: Container(
                                 decoration: const BoxDecoration(
-                                  color: Colors.black54,
+                                  color: AppColors.BLACK_54,
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
                                   Icons.close,
                                   size: 20,
-                                  color: Colors.white,
+                                  color: AppColors.WHITE,
                                 ),
                               ),
                             ),
@@ -442,7 +443,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
               // Submit Button
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber,
+                  backgroundColor: AppColors.THEME_COLOR,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -453,7 +454,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                 },
                 child: const Text(
                   "Submit Listing",
-                  style: TextStyle(color: Colors.black, fontSize: 16),
+                  style: TextStyle(color: AppColors.BLACK, fontSize: 16),
                 ),
               ),
             ],

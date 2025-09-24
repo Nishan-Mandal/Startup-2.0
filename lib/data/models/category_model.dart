@@ -20,16 +20,15 @@ class Category {
   });
 
   // 🔹 Convert Firestore -> Dart Model
-  factory Category.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
-      id: doc.id,
-      name: data['name'] ?? '',
-      description: data['description'] ?? '',
-      imageUrl: data['imageUrl'] ?? '',
-      tags: List<String>.from(data['tags'] ?? []),
-      section: data['section'] ?? 'others',
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      id: json['id']??'',
+      name: json['name'] ?? '',
+      description: json['description'] ?? '',
+      imageUrl: json['imageUrl'] ?? '',
+      tags: List<String>.from(json['tags'] ?? []),
+      section: json['section'] ?? 'others',
+      createdAt: (json['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 

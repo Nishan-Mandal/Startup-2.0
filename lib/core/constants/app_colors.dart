@@ -1,21 +1,14 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const Color white = Colors.white;
-  static const Color pastelOrnage = Color(0xFFFFD8A8);
+  static const Color THEME_COLOR = Colors.red;
+  static const Color WHITE = Colors.white;
+  static const Color BLACK = Colors.black;
+  static const Color BLACK_12 = Colors.black12;
+  static const Color BLACK_54 = Colors.black54;
+  static const Color GREY = Colors.grey;
+  static const Color GREY_SHADE_50 = Color(0xFFFAFAFA); // same as grey[50]
+  static const Color GREY_SHADE_100 = Color(0xFFF5F5F5); // Colors.grey.shade100
+  static const Color GREY_SHADE_300 = Color(0xFFE0E0E0);
   
-
-  //Bottom Navigation bar
-  static const Color selectedColor = Colors.black;
-  static const Color unselectedColor = Colors.grey;
-  static const Color badgeColor = Colors.green;
-
-  static const Color primary = Color(0xFFFF9800); // orange gradient
-  static const Color accent = Color(0xFFFFC107);
-  static const Color grey = Colors.grey;
-  static const Color black = Colors.black;
-
-  static const Color background = Color(0xFFF9F9F9);
-
-
 }

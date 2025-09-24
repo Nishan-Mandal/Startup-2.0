@@ -1,7 +1,9 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/category_model.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
@@ -131,17 +133,14 @@ class _CategoryScreenState extends State<CategoryScreen> {
     ];
 
     for (var category in categories) {
-      await FirebaseFirestore.instance
-          .collection("categories")
-          .doc()
-          .set({
-            "name": category["name"],
-            "description": category["description"],
-            "imageUrl": category["imageUrl"],
-            "tags": category["tags"],
-            "section": category["section"],
-            "createdAt": category["createdAt"],
-          });
+      await FirebaseFirestore.instance.collection("categories").doc().set({
+        "name": category["name"],
+        "description": category["description"],
+        "imageUrl": category["imageUrl"],
+        "tags": category["tags"],
+        "section": category["section"],
+        "createdAt": category["createdAt"],
+      });
       print("✅ Imported: ${category['name']}");
     }
   }
@@ -171,100 +170,75 @@ class _CategoryScreenState extends State<CategoryScreen> {
     final snapshot =
         await FirebaseFirestore.instance.collection("categories").get();
 
-    return snapshot.docs.map((doc) => Category.fromFirestore(doc)).toList();
+    return snapshot.docs.map((doc) => Category.fromJson(doc.data())).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.white,
-      body: SafeArea(
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            // 🔹 Top Bar + Location Selector
-            CommonWidgets.topSection(context),
+      backgroundColor: AppColors.GREY_SHADE_50,
+      body: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          // 🔹 Top Bar + Location Selector
+          CommonWidgets.topSection(context),
 
-            // 🔹 Pinned Search Bar
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: SearchBarHeader(child: _searchBar()),
-            ),
-
-            // 🔹 Fetch & Render Categories
-            SliverToBoxAdapter(
-              child: FutureBuilder<List<Category>>(
-                future: _fetchCategories(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-
-                  if (snapshot.hasError) {
-                    return Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text("Error: ${snapshot.error}"),
-                    );
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text("No categories found"),
-                    );
-                  }
-
-                  final categories = snapshot.data!;
-
-                  // 🔹 Group categories by section
-                  final Map<String, List<Category>> groupedCategories = {};
-                  for (var cat in categories) {
-                    groupedCategories
-                        .putIfAbsent(cat.section, () => [])
-                        .add(cat);
-                  }
-
-                  // 🔹 Render each section
-                  return Column(
-                    children:
-                        groupedCategories.entries.map((entry) {
-                          return buildCategorySection(entry.key, entry.value);
-                        }).toList(),
-                  );
-                },
-              ),
-            ),
-
-            // 🔹 Footer tagline
-            SliverToBoxAdapter(child: CommonWidgets.footerTagline()),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _searchBar() {
-    return TextField(
-      decoration: InputDecoration(
-        hintText: "What service do you need?",
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: Container(
-          margin: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: Colors.orange,
-            borderRadius: BorderRadius.circular(8),
+          // 🔹 Pinned Search Bar
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: SearchBarHeader(child: CommonWidgets.searchBar()),
           ),
-          child: const Icon(Icons.tune, color: AppColors.white),
-        ),
-        filled: true,
-        fillColor: Colors.grey.shade100,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
+
+          // 🔹 Fetch & Render Categories
+          SliverToBoxAdapter(
+            child: FutureBuilder<List<Category>>(
+              future: _fetchCategories(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Column(
+                    children: List.generate(
+                      3,
+                      (index) => shimmerCategoryScreen(itemCount: 8),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text("Error: ${snapshot.error}"),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text("No categories found"),
+                  );
+                }
+
+                final categories = snapshot.data!;
+
+                // 🔹 Group categories by section
+                final Map<String, List<Category>> groupedCategories = {};
+                for (var cat in categories) {
+                  groupedCategories.putIfAbsent(cat.section, () => []).add(cat);
+                }
+
+                // 🔹 Render each section
+                return Column(
+                  children:
+                      groupedCategories.entries.map((entry) {
+                        return buildCategorySection(entry.key, entry.value);
+                      }).toList(),
+                );
+              },
+            ),
+          ),
+
+          // 🔹 Footer tagline
+          SliverToBoxAdapter(child: CommonWidgets.footerTagline()),
+        ],
       ),
     );
   }
@@ -312,19 +286,32 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     width: 60,
                     padding: EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.WHITE,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: AppColors.GREY_SHADE_300),
                     ),
                     child:
                         category.imageUrl.isNotEmpty
-                            ? Image.network(
-                              category.imageUrl,
+                            ? CachedNetworkImage(
+                              imageUrl: category.imageUrl,
                               fit: BoxFit.cover,
+                              placeholder:
+                                  (context, url) => Shimmer.fromColors(
+                                    baseColor: AppColors.GREY_SHADE_300,
+                                    highlightColor: AppColors.GREY_SHADE_100,
+                                    child: Container(
+                                      color: AppColors.GREY_SHADE_300,
+                                    ),
+                                  ),
+                              errorWidget:
+                                  (context, url, error) => const Icon(
+                                    Icons.broken_image,
+                                    color: AppColors.GREY,
+                                  ),
                             )
                             : const Icon(
                               Icons.image_not_supported,
-                              color: Colors.grey,
+                              color: AppColors.GREY,
                             ),
                   ),
 
@@ -334,7 +321,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: Colors.black,
+                      color: AppColors.BLACK,
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 1,
@@ -346,6 +333,77 @@ class _CategoryScreenState extends State<CategoryScreen> {
           },
         ),
       ],
+    );
+  }
+
+  static Widget shimmerCategoryScreen({int itemCount = 8}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 🔹 Heading shimmer
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Shimmer.fromColors(
+            baseColor: AppColors.GREY_SHADE_300,
+            highlightColor: AppColors.GREY_SHADE_100,
+            child: Container(
+              height: 16,
+              width: 120,
+              color: AppColors.GREY_SHADE_300,
+            ),
+          ),
+        ),
+
+        // 🔹 Grid shimmer
+        buildGridShimmer(itemCount: itemCount),
+      ],
+    );
+  }
+
+  /// Grid shimmer only
+  static Widget buildGridShimmer({int itemCount = 8}) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: itemCount,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 0.8,
+      ),
+      itemBuilder: (context, index) {
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // 🔹 Shimmer circle
+            Shimmer.fromColors(
+              baseColor: AppColors.GREY_SHADE_300,
+              highlightColor: AppColors.GREY_SHADE_100,
+              child: Container(
+                height: 60,
+                width: 60,
+                decoration: BoxDecoration(
+                  color: AppColors.GREY_SHADE_300,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // 🔹 Shimmer text
+            Shimmer.fromColors(
+              baseColor: AppColors.GREY_SHADE_300,
+              highlightColor: AppColors.GREY_SHADE_100,
+              child: Container(
+                height: 12,
+                width: 50,
+                color: AppColors.GREY_SHADE_300,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
