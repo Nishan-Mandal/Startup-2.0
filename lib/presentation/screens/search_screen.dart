@@ -8,7 +8,6 @@ import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/category_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
-import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -298,7 +297,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   leading: ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
                                     child: CachedNetworkImage(
-                                      imageUrl: category.imageUrl ?? "",
+                                      imageUrl: category.imageUrl,
                                       width: 30,
                                       height: 30,
                                       fit: BoxFit.cover,
@@ -315,7 +314,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                           ),
                                     ),
                                   ),
-                                  title: Text(category.name ?? ""),
+                                  title: Text(category.name),
                                 );
                               }),
 

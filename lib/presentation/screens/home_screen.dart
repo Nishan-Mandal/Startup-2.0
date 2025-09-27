@@ -12,7 +12,6 @@ import 'package:startup_20/data/models/home_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
-import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/presentation/screens/search_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
@@ -283,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   crossAxisCount: 2,
                                   crossAxisSpacing: 12,
                                   mainAxisSpacing: 12,
-                                  childAspectRatio: 3 / 3.8,
+                                  childAspectRatio: 3 / 3.9,
                                 ),
                             itemBuilder:
                                 (context, index) =>
@@ -479,7 +478,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 60,
                 padding: EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.GREY_SHADE_50,
+                  color: AppColors.WHITE,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: AppColors.GREY_SHADE_300),
                 ),

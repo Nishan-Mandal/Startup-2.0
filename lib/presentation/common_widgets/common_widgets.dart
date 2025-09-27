@@ -196,7 +196,7 @@ class CommonWidgets {
                       ? listing.images.first.thumbUrl
                       : listing.images.first.fullUrl)
                   : "http://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/static%2FImage_Placeholder.jpg?alt=media&token=22a0ec73-6352-4885-bfaf-c485750af28f",
-              height: 120,
+              height: 100,
               width: double.infinity,
               fit: BoxFit.cover,
               errorBuilder:

@@ -39,7 +39,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
         extendBody: true,
         bottomNavigationBar: AnimatedContainer(
           duration: const Duration(milliseconds: 400),
-          height: navProvider.isVisible ? kBottomNavigationBarHeight+10 : 0,
+          height: navProvider.isVisible ? kBottomNavigationBarHeight: 0,
           decoration: BoxDecoration(
             color: AppColors.WHITE,
             boxShadow: [

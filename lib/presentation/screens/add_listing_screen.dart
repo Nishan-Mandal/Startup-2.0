@@ -25,13 +25,12 @@ class _AddListingScreenState extends State<AddListingScreen> {
   final List<String> _categories = ["Restaurant", "Shop", "Service", "Other"];
 
   final List<File> _images = [];
-  bool _isLoading = false;
 
   /// Pick multiple images
   Future<void> _pickImages() async {
     final picker = ImagePicker();
     final pickedFiles = await picker.pickMultiImage();
-    if (pickedFiles != null && pickedFiles.isNotEmpty) {
+    if (pickedFiles.isNotEmpty) {
       setState(() {
         _images.addAll(pickedFiles.map((file) => File(file.path)).toList());
       });
@@ -200,7 +199,6 @@ class _AddListingScreenState extends State<AddListingScreen> {
   Future<void> _submitContribution() async {
     // if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
 
     try {
       final contributionId = Uuid().v4();
@@ -262,15 +260,6 @@ class _AddListingScreenState extends State<AddListingScreen> {
       ).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
 
-    setState(() => _isLoading = false);
-  }
-
-  /// Convert EXIF rationals to degrees
-  double _convertToDegree(List values) {
-    var d = values[0].toDouble();
-    var m = values[1].toDouble();
-    var s = values[2].toDouble();
-    return d + (m / 60.0) + (s / 3600.0);
   }
 
   @override
