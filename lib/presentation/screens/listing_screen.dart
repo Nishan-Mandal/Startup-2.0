@@ -4,6 +4,7 @@ import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
+import 'package:startup_20/presentation/screens/search_screen.dart';
 
 class ListingPage extends StatefulWidget {
   final String title;
@@ -15,6 +16,7 @@ class ListingPage extends StatefulWidget {
 
 class _ListingPageState extends State<ListingPage> {
   late List<Listing> listings;
+
   /// 🔹 Fetch listings from Firestore using the Listing model
   Future<List<Listing>> fetchListings() async {
     final snapshot =
@@ -24,7 +26,8 @@ class _ListingPageState extends State<ListingPage> {
             .orderBy("createdAt", descending: true)
             .get();
 
-    listings = snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
+    listings =
+        snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
     return listings;
   }
 
@@ -72,7 +75,10 @@ class _ListingPageState extends State<ListingPage> {
                 IconButton(
                   icon: const Icon(Icons.search, size: 24),
                   onPressed: () {
-                    // TODO: Add search logic
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => SearchScreen()),
+                    );
                   },
                 ),
               ],
@@ -124,7 +130,11 @@ class _ListingPageState extends State<ListingPage> {
 
               return GestureDetector(
                 onTap: () {
-                  CommonMethods.navigateToListingDetailScreen(context, listing, listings);
+                  CommonMethods.navigateToListingDetailScreen(
+                    context,
+                    listing,
+                    listings,
+                  );
                 },
                 child: CommonWidgets.listingCard(listing),
               );

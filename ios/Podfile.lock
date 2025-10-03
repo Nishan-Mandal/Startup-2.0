@@ -1198,6 +1198,9 @@ PODS:
     - Firebase/Firestore (= 12.2.0)
     - firebase_core
     - Flutter
+  - Firebase/Auth (12.2.0):
+    - Firebase/CoreOnly
+    - FirebaseAuth (~> 12.2.0)
   - Firebase/CoreOnly (12.2.0):
     - FirebaseCore (~> 12.2.0)
   - Firebase/Firestore (12.2.0):
@@ -1206,7 +1209,11 @@ PODS:
   - Firebase/Storage (12.2.0):
     - Firebase/CoreOnly
     - FirebaseStorage (~> 12.2.0)
-  - firebase_core (4.1.0):
+  - firebase_auth (6.1.0):
+    - Firebase/Auth (= 12.2.0)
+    - firebase_core
+    - Flutter
+  - firebase_core (4.1.1):
     - Firebase/CoreOnly (= 12.2.0)
     - Flutter
   - firebase_storage (13.0.1):
@@ -1214,6 +1221,15 @@ PODS:
     - firebase_core
     - Flutter
   - FirebaseAppCheckInterop (12.2.0)
+  - FirebaseAuth (12.2.0):
+    - FirebaseAppCheckInterop (~> 12.2.0)
+    - FirebaseAuthInterop (~> 12.2.0)
+    - FirebaseCore (~> 12.2.0)
+    - FirebaseCoreExtension (~> 12.2.0)
+    - GoogleUtilities/AppDelegateSwizzler (~> 8.1)
+    - GoogleUtilities/Environment (~> 8.1)
+    - GTMSessionFetcher/Core (< 6.0, >= 3.4)
+    - RecaptchaInterop (~> 101.0)
   - FirebaseAuthInterop (12.2.0)
   - FirebaseCore (12.2.0):
     - FirebaseCoreInternal (~> 12.2.0)
@@ -1260,14 +1276,27 @@ PODS:
   - geolocator_apple (1.2.0):
     - Flutter
     - FlutterMacOS
+  - GoogleUtilities/AppDelegateSwizzler (8.1.0):
+    - GoogleUtilities/Environment
+    - GoogleUtilities/Logger
+    - GoogleUtilities/Network
+    - GoogleUtilities/Privacy
   - GoogleUtilities/Environment (8.1.0):
     - GoogleUtilities/Privacy
   - GoogleUtilities/Logger (8.1.0):
     - GoogleUtilities/Environment
     - GoogleUtilities/Privacy
+  - GoogleUtilities/Network (8.1.0):
+    - GoogleUtilities/Logger
+    - "GoogleUtilities/NSData+zlib"
+    - GoogleUtilities/Privacy
+    - GoogleUtilities/Reachability
   - "GoogleUtilities/NSData+zlib (8.1.0)":
     - GoogleUtilities/Privacy
   - GoogleUtilities/Privacy (8.1.0)
+  - GoogleUtilities/Reachability (8.1.0):
+    - GoogleUtilities/Logger
+    - GoogleUtilities/Privacy
   - "gRPC-C++ (1.69.0)":
     - "gRPC-C++/Implementation (= 1.69.0)"
     - "gRPC-C++/Interface (= 1.69.0)"
@@ -1389,6 +1418,7 @@ PODS:
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
+  - RecaptchaInterop (101.0.0)
   - SDWebImage (5.21.2):
     - SDWebImage/Core (= 5.21.2)
   - SDWebImage/Core (5.21.2)
@@ -1403,6 +1433,7 @@ PODS:
 
 DEPENDENCIES:
   - cloud_firestore (from `.symlinks/plugins/cloud_firestore/ios`)
+  - firebase_auth (from `.symlinks/plugins/firebase_auth/ios`)
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
   - firebase_storage (from `.symlinks/plugins/firebase_storage/ios`)
   - Flutter (from `Flutter`)
@@ -1420,6 +1451,7 @@ SPEC REPOS:
     - BoringSSL-GRPC
     - Firebase
     - FirebaseAppCheckInterop
+    - FirebaseAuth
     - FirebaseAuthInterop
     - FirebaseCore
     - FirebaseCoreExtension
@@ -1436,12 +1468,15 @@ SPEC REPOS:
     - libwebp
     - Mantle
     - nanopb
+    - RecaptchaInterop
     - SDWebImage
     - SDWebImageWebPCoder
 
 EXTERNAL SOURCES:
   cloud_firestore:
     :path: ".symlinks/plugins/cloud_firestore/ios"
+  firebase_auth:
+    :path: ".symlinks/plugins/firebase_auth/ios"
   firebase_core:
     :path: ".symlinks/plugins/firebase_core/ios"
   firebase_storage:
@@ -1468,9 +1503,11 @@ SPEC CHECKSUMS:
   BoringSSL-GRPC: dded2a44897e45f28f08ae87a55ee4bcd19bc508
   cloud_firestore: 15f49a9d824f4173238f15c2616dfc20ff9a0d0d
   Firebase: 26f6f8d460603af3df970ad505b16b15f5e2e9a1
-  firebase_core: 3ff52146406557dddd01d570e807e203ec7e1302
+  firebase_auth: 069b05a861a7c2f7a73112dd616a49a40f35ae52
+  firebase_core: dfc4bd142bee4bc53a5d482397ca322c2dd3165d
   firebase_storage: b75bbed2ad6014962b80951ab5cd179d6ff3f39a
   FirebaseAppCheckInterop: a1b2598c64c5a8c42fd6f6a1c3d0938ae4324678
+  FirebaseAuth: 059c11702bdb759bb49b6c7ec6ff67abf21f39c4
   FirebaseAuthInterop: 217702acd4cc6baa98ba9d6c054532e0de0b8a16
   FirebaseCore: 311c48a147ad4a0ab7febbaed89e8025c67510cd
   FirebaseCoreExtension: 73af080c22a2f7b44cefa391dc08f7e4ee162cb5
@@ -1493,6 +1530,7 @@ SPEC CHECKSUMS:
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
+  RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   SDWebImage: 9f177d83116802728e122410fb25ad88f5c7608a
   SDWebImageWebPCoder: e38c0a70396191361d60c092933e22c20d5b1380
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0

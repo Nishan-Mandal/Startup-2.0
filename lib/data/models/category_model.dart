@@ -22,7 +22,7 @@ class Category {
   // 🔹 Convert Firestore -> Dart Model
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
-      id: json['id']??'',
+      id: json['categoryId']??'',
       name: json['name'] ?? '',
       description: json['description'] ?? '',
       imageUrl: json['imageUrl'] ?? '',

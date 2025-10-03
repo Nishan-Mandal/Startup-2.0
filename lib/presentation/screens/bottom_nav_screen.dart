@@ -1,9 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/presentation/screens/category_screen.dart';
-import 'package:startup_20/presentation/screens/chat_screen.dart';
+import 'package:startup_20/presentation/screens/conversation/chat_screen.dart';
 import 'package:startup_20/presentation/screens/contribute_screen.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
@@ -39,7 +40,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
         extendBody: true,
         bottomNavigationBar: AnimatedContainer(
           duration: const Duration(milliseconds: 400),
-          height: navProvider.isVisible ? kBottomNavigationBarHeight: 0,
+          height: navProvider.isVisible ? kBottomNavigationBarHeight : 0,
           decoration: BoxDecoration(
             color: AppColors.WHITE,
             boxShadow: [
@@ -99,11 +100,12 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
         ),
         body: SafeArea(
           child: IndexedStack(
-           index: navProvider.currentIndex,
-            children: const [
+            index: navProvider.currentIndex,
+            children: [
               HomeScreen(),
               CategoryScreen(),
-              ChatScreen(),
+              // ChatListScreen(currentUserId: FirebaseAuth.instance.currentUser!.uid,),
+              ChatScreen(currentUserId: FirebaseAuth.instance.currentUser!.uid),
               ContributionScreen(),
             ],
           ),

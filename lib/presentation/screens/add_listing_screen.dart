@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -9,6 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:startup_20/data/models/category_model.dart';
+import 'package:startup_20/data/models/category_model.dart' as models;
 
 class AddListingScreen extends StatefulWidget {
   @override
@@ -20,11 +21,27 @@ class _AddListingScreenState extends State<AddListingScreen> {
   final TextEditingController _longitudeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  late Future<List<models.Category>> _categoriesFuture;
   String? _selectedCategory;
-
-  final List<String> _categories = ["Restaurant", "Shop", "Service", "Other"];
+  bool _isLoading = false;
 
   final List<File> _images = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _categoriesFuture = fetchCategories();
+  }
+
+  /// 🔹 Fetch categories from Firestore
+  Future<List<models.Category>> fetchCategories() async {
+    final snapshot =
+        await FirebaseFirestore.instance.collection("categories").get();
+
+    return snapshot.docs
+        .map((doc) => models.Category.fromJson(doc.data()))
+        .toList();
+  }
 
   /// Pick multiple images
   Future<void> _pickImages() async {
@@ -79,10 +96,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
 
   /// Upload single image (full + thumbnail)
-  Future<Map<String, dynamic>> _uploadImage(
-    File file,
-    String listingId,
-  ) async {
+  Future<Map<String, dynamic>> _uploadImage(File file, String listingId) async {
     final storageRef = FirebaseStorage.instance.ref();
     final fileId = const Uuid().v4();
 
@@ -117,9 +131,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
     );
 
     // Upload full
-    final fullRef = storageRef.child(
-      "listings/$listingId/full_$fileId.jpg",
-    );
+    final fullRef = storageRef.child("listings/$listingId/full_$fileId.jpg");
     await fullRef.putData(
       fullData!,
       SettableMetadata(contentType: "image/jpeg"),
@@ -127,9 +139,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
     final fullUrl = await fullRef.getDownloadURL();
 
     // Upload thumbnail
-    final thumbRef = storageRef.child(
-      "listings/$listingId/thumb_$fileId.jpg",
-    );
+    final thumbRef = storageRef.child("listings/$listingId/thumb_$fileId.jpg");
     await thumbRef.putData(
       thumbData!,
       SettableMetadata(contentType: "image/jpeg"),
@@ -197,258 +207,307 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
   /// Submit contribution
   Future<void> _submitContribution() async {
-    // if (!_formKey.currentState!.validate()) return;
-
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
-      final contributionId = Uuid().v4();
-      final listingId = Uuid().v4();
-      final images = await _uploadImages(contributionId);
+      final listingDocRef =
+          await FirebaseFirestore.instance.collection("listings").doc();
 
-      await FirebaseFirestore.instance
-          .collection("listings")
-          .doc(contributionId)
-          .set({
-            "listingId": listingId, 
-            "contributionId": contributionId,      
-            "name":  _nameController.text.trim(),
-            "description": "string",
-            "images": images, // ✅ full + thumb urls stored
-            "address": "string",
-            "geo": {
-              "lat":  _latitudeController.text.trim(),
-              "lng":  _longitudeController.text.trim()
-            },
-            "phone": _phoneController.text.trim(),
-            "category": _selectedCategory,      
-            "tags": [_selectedCategory],
-            "addedBy": "admin",       
-            "isClaimed": false,    
-            "ownerId": "string|null", 
-            "claimStatus": "pending",  
-            "verifiedBy": "string|null",
-            "createdAt": FieldValue.serverTimestamp(),
-            "updatedAt": FieldValue.serverTimestamp(),
-          });
+      final contributionDocRef =
+          await FirebaseFirestore.instance.collection("contributions").doc();
 
+      final images = await _uploadImages(listingDocRef.id);
 
-      await FirebaseFirestore.instance
-          .collection("contributions")
-          .doc(contributionId)
-          .set({
-            "contributionId": contributionId,
-            "userId": "mockUser123", // replace with FirebaseAuth.currentUser!.uid
-            "listingId": listingId, 
-            "type": "add",
-            "status": "pending",
-            "reviewedBy": null,
-            "createdAt": FieldValue.serverTimestamp(),
-            "updatedAt": FieldValue.serverTimestamp(),
-          });
+      final listingData = {
+        "listingId": listingDocRef.id,
+        "contributionId": contributionDocRef.id,
+        "name": _nameController.text.trim(),
+        "description": "string",
+        "images": images,
+        "address": "string",
+        "geo": {
+          "lat": _latitudeController.text.trim(),
+          "lng": _longitudeController.text.trim(),
+        },
+        "phone": _phoneController.text.trim(),
+        "category": _selectedCategory,
+        "tags": [_selectedCategory],
+        "addedBy": "admin",
+        "isClaimed": false,
+        "ownerId": "string|null",
+        "claimStatus": "pending",
+        "verifiedBy": "string|null",
+        "reviews": null,
+        "rating": null,
+        "createdAt": FieldValue.serverTimestamp(),
+        "updatedAt": FieldValue.serverTimestamp(),
+      };
+      await listingDocRef.set(listingData);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Contribution submitted for review ✅")),
-      );
+      final contributionData = {
+        "contributionId": contributionDocRef.id,
+        "userId": "mockUser123",
+        "listingId": listingDocRef.id,
+        "type": "add",
+        "status": "pending",
+        "reviewedBy": null,
+        "createdAt": FieldValue.serverTimestamp(),
+        "updatedAt": FieldValue.serverTimestamp(),
+      };
 
-      Navigator.pop(context);
+      await contributionDocRef.set(contributionData);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Contribution submitted for review ✅")),
+        );
+        Navigator.pop(context);
+      }
     } catch (e) {
-      // Print both for debugging
       debugPrint("Error: $e");
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Upload Listing")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Image Upload Box
-              GestureDetector(
-                onTap: () {
-                  _pickImages();
-                },
-                child: Container(
-                  height: 150,
-                  decoration: BoxDecoration(
-                    color: AppColors.GREY_SHADE_300,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.cloud_upload,
-                          size: 50,
-                          color: AppColors.BLACK_54,
+      backgroundColor: AppColors.WHITE,
+      appBar: AppBar(iconTheme:IconThemeData(color: AppColors.WHITE,), title: const Text("Upload Listing", style: TextStyle(color: AppColors.WHITE),), backgroundColor: AppColors.THEME_COLOR,),
+      body: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Image Upload Box
+                  GestureDetector(
+                    onTap: () {
+                      _pickImages();
+                    },
+                    child: Container(
+                      height: 150,
+                      decoration: BoxDecoration(
+                        color: AppColors.GREY_SHADE_300,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.cloud_upload,
+                              size: 50,
+                              color: AppColors.BLACK_54,
+                            ),
+                            SizedBox(height: 8),
+                            Text("Tap to upload image"),
+                          ],
                         ),
-                        SizedBox(height: 8),
-                        Text("Tap to upload image"),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-              // 📸 Preview selected images
-              if (_images.isNotEmpty)
-                SizedBox(
-                  height: 120,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _images.length,
-                    itemBuilder: (context, index) {
-                      return Stack(
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 8),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.file(
-                                _images[index],
-                                width: 120,
-                                height: 120,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                          // ❌ Remove button
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _images.removeAt(index);
-                                });
-                              },
-                              child: Container(
-                                decoration: const BoxDecoration(
-                                  color: AppColors.BLACK_54,
-                                  shape: BoxShape.circle,
+                  // 📸 Preview selected images
+                  if (_images.isNotEmpty)
+                    SizedBox(
+                      height: 120,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _images.length,
+                        itemBuilder: (context, index) {
+                          return Stack(
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 8,
                                 ),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 20,
-                                  color: AppColors.WHITE,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.file(
+                                    _images[index],
+                                    width: 120,
+                                    height: 120,
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                               ),
-                            ),
+                              // ❌ Remove button
+                              Positioned(
+                                top: 4,
+                                right: 4,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _images.removeAt(index);
+                                    });
+                                  },
+                                  child: Container(
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.BLACK_54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 20,
+                                      color: AppColors.WHITE,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Latitude & Longitude + GPS Button
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _latitudeController,
+                          decoration: const InputDecoration(
+                            labelText: "Latitude",
+                            border: OutlineInputBorder(),
                           ),
-                        ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _longitudeController,
+                          decoration: const InputDecoration(
+                            labelText: "Longitude",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.gps_fixed,
+                          color: Colors.black87,
+                        ),
+                        onPressed: () {
+                          _getCurrentLocation();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Shop/Service Name
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: "Shop/Service Name",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Phone
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: "Phone",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Category Dropdown
+                  FutureBuilder<List<models.Category>>(
+                    future: _categoriesFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (snapshot.hasError) {
+                        return Text("Error: ${snapshot.error}");
+                      }
+
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return const Text("No categories found");
+                      }
+
+                      final categories = snapshot.data!;
+
+                      return DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: _selectedCategory,
+                        items:
+                            categories
+                                .map(
+                                  (cat) => DropdownMenuItem(
+                                    value:
+                                        cat.name, // store category name as value
+                                    child: Text(cat.name),
+                                  ),
+                                )
+                                .toList(),
+                        decoration: const InputDecoration(
+                          labelText: "Category",
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedCategory = value;
+                          });
+                        },
                       );
                     },
                   ),
-                ),
 
-              const SizedBox(height: 16),
+                  const SizedBox(height: 24),
 
-              // Latitude & Longitude + GPS Button
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _latitudeController,
-                      decoration: const InputDecoration(
-                        labelText: "Latitude",
-                        border: OutlineInputBorder(),
+                  // Submit Button
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.THEME_COLOR,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _longitudeController,
-                      decoration: const InputDecoration(
-                        labelText: "Longitude",
-                        border: OutlineInputBorder(),
-                      ),
+                    onPressed: _isLoading ? null : _submitContribution,
+                    child: const Text(
+                      "Submit Listing",
+                      style: TextStyle(color: AppColors.WHITE, fontSize: 16),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.gps_fixed, color: Colors.black87),
-                    onPressed: () {
-                      _getCurrentLocation();
-                    },
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-
-              // Shop/Service Name
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: "Shop/Service Name",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Phone
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: "Phone",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Category Dropdown
-              DropdownButtonFormField<String>(
-                value: _selectedCategory,
-                items:
-                    _categories
-                        .map(
-                          (cat) =>
-                              DropdownMenuItem(value: cat, child: Text(cat)),
-                        )
-                        .toList(),
-                decoration: const InputDecoration(
-                  labelText: "Category",
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCategory = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 24),
-
-              // Submit Button
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.THEME_COLOR,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: () {
-                  _submitContribution();
-                },
-                child: const Text(
-                  "Submit Listing",
-                  style: TextStyle(color: AppColors.BLACK, fontSize: 16),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          // 🔹 Loading overlay
+          if (_isLoading)
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: CircularProgressIndicator(color: AppColors.THEME_COLOR),
+              ),
+            ),
+        ],
       ),
     );
   }

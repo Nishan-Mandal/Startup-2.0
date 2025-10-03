@@ -21,12 +21,22 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
   bool isLoading = false;
+  final FocusNode _searchFocusNode = FocusNode(); 
 
   String query = "";
   List<String> recentSearches = ["Plumber", "Grocery", "Salon"];
 
   List<Category> categoryResults = [];
   List<Listing> listingResults = [];
+
+    @override
+  void initState() {
+    super.initState();
+    // 👇 Auto focus when screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FocusScope.of(context).requestFocus(_searchFocusNode);
+    });
+  }
 
   /// Debounced Search
   void _onSearchChanged(String text) {
@@ -127,6 +137,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void dispose() {
     _controller.dispose();
     _debounce?.cancel();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -146,6 +157,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   Expanded(
                     child: TextField(
                       controller: _controller,
+                      focusNode: _searchFocusNode,
                       onChanged: _onSearchChanged,
                       decoration: InputDecoration(
                         hintText: "What service do you need?",

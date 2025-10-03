@@ -65,8 +65,8 @@ class Listing {
           (json['images'] as List<dynamic>? ?? [])
               .map((e) => ImageFile.fromJson(e))
               .toList(),
-      reviews: json['reviews'],
-      rating: json['rating'],
+      reviews: json['reviews']??0,
+      rating: json['rating']??1,
     );
   }
 

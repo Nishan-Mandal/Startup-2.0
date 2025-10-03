@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
@@ -66,6 +67,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       );
       return;
     }
+    String text = _reviewController.text;
+    _reviewController.clear();
 
     final reviewsRef =
         FirebaseFirestore.instance
@@ -76,20 +79,22 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
     final review = Review(
       reviewId: reviewsRef.id,
-      userId: "123", // Replace with logged-in userId
+      userId: FirebaseAuth.instance.currentUser!.uid,
       userName: "John Doe", // Replace with logged-in userName
       rating: _selectedRating,
-      comment: _reviewController.text,
+      comment: text,
       createdAt: DateTime.now(),
     );
 
     await reviewsRef.set(review.toJson());
 
-    _reviewController.clear();
     setState(() => _selectedRating = 0);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Review submitted successfully")),
+      const SnackBar(
+        content: Text("Review submitted successfully"),
+        backgroundColor: Colors.green,
+      ),
     );
   }
 
@@ -276,12 +281,12 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             onPressed: () {},
             icon: const Icon(
               Icons.chat_bubble,
-              color: AppColors.GREY,
+              color: AppColors.THEME_COLOR,
               size: 20,
             ),
             label: const Text(
               "Chat",
-              style: TextStyle(color: AppColors.GREY, fontSize: 17),
+              style: TextStyle(color: AppColors.THEME_COLOR, fontSize: 17),
             ),
           ),
         ],
@@ -369,27 +374,27 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 backgroundColor: AppColors.GREY_SHADE_300,
                 child: Icon(Icons.person, color: AppColors.BLACK),
               ),
-               title: Row(
-  children: [
-    Expanded(
-      child: Text(
-        r.userName,
-        style: const TextStyle(fontWeight: FontWeight.bold),
-        overflow: TextOverflow.ellipsis, // Truncate long names
-      ),
-    ),
-    const SizedBox(width: 6),
-    Row(
-      children: List.generate(5, (i) {
-        return Icon(
-          i < r.rating ? Icons.star : Icons.star_border,
-          size: 16,
-          color: AppColors.THEME_COLOR,
-        );
-      }),
-    ),
-  ],
-),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      r.userName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis, // Truncate long names
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Row(
+                    children: List.generate(5, (i) {
+                      return Icon(
+                        i < r.rating ? Icons.star : Icons.star_border,
+                        size: 16,
+                        color: AppColors.THEME_COLOR,
+                      );
+                    }),
+                  ),
+                ],
+              ),
               subtitle: Text(r.comment),
               trailing: Text(
                 "${r.createdAt.day}/${r.createdAt.month}/${r.createdAt.year}",
@@ -428,7 +433,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         final listings = snapshot.data ?? [];
 
         if (listings.isEmpty) {
-          return const Center(child: Text("No listings found"));
+          return Padding(
+            padding: const EdgeInsets.all(15),
+            child: const Text("No listings found"),
+          );
         }
 
         return GridView.builder(

@@ -5,11 +5,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/home_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
+import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
@@ -328,7 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             .toList(),
                       ),
                       const SizedBox(height: 20),
-                      _bannerData(homeData.banners[0]),
+                      _bannerData(homeData.banners[index+1]),
                     ],
                   ]),
                 ),
@@ -345,7 +347,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _promoBanner(List<dynamic> promoBanners) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 15),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       child: CarouselSlider.builder(
         itemCount: promoBanners.length,
         itemBuilder: (context, index, realIndex) {
@@ -484,29 +486,43 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10), // match container
-                  child: CachedNetworkImage(
-                    imageUrl:
-                        category.imageUrl, // 🔹 replace with your image URL
+                  child: CachedNetworkSvg(
+                    url: category.imageUrl,
                     fit: BoxFit.cover,
-
-                    placeholder: (context, url) {
-                      return Shimmer.fromColors(
-                        baseColor: AppColors.GREY_SHADE_300,
-                        highlightColor: AppColors.GREY_SHADE_100,
-                        child: Container(
-                          width: 60,
-                          height: 60,
-                          color: Colors.white,
+                    width: double.infinity,
+                    height: double.infinity,
+                    // show your shimmer while loading
+                    placeholder:
+                         Shimmer.fromColors(
+                          baseColor: AppColors.GREY_SHADE_300,
+                          highlightColor: AppColors.GREY_SHADE_100,
+                          child: Container(color: AppColors.GREY_SHADE_300),
                         ),
-                      );
-                    },
-                    errorWidget:
-                        (context, url, error) => const Icon(
-                          Icons.broken_image,
-                          color: Colors.grey,
-                          size: 28,
-                        ),
+                    errorWidget: const Icon(Icons.broken_image),
                   ),
+                  // CachedNetworkImage(
+                  //   imageUrl:
+                  //       category.imageUrl, // 🔹 replace with your image URL
+                  //   fit: BoxFit.cover,
+
+                  //   placeholder: (context, url) {
+                  //     return Shimmer.fromColors(
+                  //       baseColor: AppColors.GREY_SHADE_300,
+                  //       highlightColor: AppColors.GREY_SHADE_100,
+                  //       child: Container(
+                  //         width: 60,
+                  //         height: 60,
+                  //         color: Colors.white,
+                  //       ),
+                  //     );
+                  //   },
+                  //   errorWidget:
+                  //       (context, url, error) => const Icon(
+                  //         Icons.broken_image,
+                  //         color: Colors.grey,
+                  //         size: 28,
+                  //       ),
+                  // ),
                 ),
               ),
               const SizedBox(height: 6),
@@ -553,7 +569,11 @@ class _HomeScreenState extends State<HomeScreen> {
           final listing = listings[index];
           return GestureDetector(
             onTap: () {
-              CommonMethods.navigateToListingDetailScreen(context, listing, listings);
+              CommonMethods.navigateToListingDetailScreen(
+                context,
+                listing,
+                listings,
+              );
             },
             child: Container(
               width: 280,
@@ -577,7 +597,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           listing.images.isNotEmpty
                               ? listing.images.first.thumbUrl
                               : "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/static%2FImage_Placeholder.jpg?alt=media&token=22a0ec73-6352-4885-bfaf-c485750af28f",
-            
+
                       placeholder: (context, url) {
                         return Shimmer.fromColors(
                           baseColor: Colors.grey.shade300,
@@ -589,7 +609,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         );
                       },
-            
+
                       errorWidget:
                           (context, url, error) => Container(
                             color: Colors.grey.shade300,
@@ -600,25 +620,34 @@ class _HomeScreenState extends State<HomeScreen> {
                       fit: BoxFit.cover,
                     ),
                   ),
-            
+
                   // 🔹 Right Side Details
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          Text(
-                            listing.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            decoration: BoxDecoration(
+                              color: AppColors.THEME_COLOR,
+                              borderRadius: BorderRadius.circular(1),
+                            ),
+                            child: const Text(
+                              "Featured",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 8),
                           Text(
                             listing.category,
                             style: const TextStyle(
@@ -629,6 +658,41 @@ class _HomeScreenState extends State<HomeScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 8),
+                          Text(
+                            listing.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on,
+                                size: 14,
+                                color: AppColors.GREY,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  listing.address,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.GREY,
+                                  ),
+                                  maxLines: 1, // show only 1 line
+                                  overflow:
+                                      TextOverflow
+                                          .ellipsis, // adds "..." if text too long
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
                           Row(
                             children: [
                               const Icon(
@@ -672,7 +736,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return GestureDetector(
           onTap: () {
-            CommonMethods.navigateToListingDetailScreen(context, listing, listings);
+            CommonMethods.navigateToListingDetailScreen(
+              context,
+              listing,
+              listings,
+            );
           },
           child: CommonWidgets.listingCard(listing),
         );
@@ -682,12 +750,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _bannerData(String imageLink) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      // padding: const EdgeInsets.symmetric(vertical: ),
       width: double.infinity,
       height: 250,
       color: AppColors.GREY_SHADE_300,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(0),
         child: CachedNetworkImage(
           imageUrl: imageLink,
           fit: BoxFit.cover,
