@@ -1,15 +1,18 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:startup_20/data/models/category_model.dart';
 import 'package:startup_20/data/models/category_model.dart' as models;
+import 'package:geocoding/geocoding.dart';
 
 class AddListingScreen extends StatefulWidget {
   @override
@@ -17,10 +20,12 @@ class AddListingScreen extends StatefulWidget {
 }
 
 class _AddListingScreenState extends State<AddListingScreen> {
-  final TextEditingController _latitudeController = TextEditingController();
-  final TextEditingController _longitudeController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  late String _latitude;
+  late String _longitude;
   late Future<List<models.Category>> _categoriesFuture;
   String? _selectedCategory;
   bool _isLoading = false;
@@ -161,9 +166,13 @@ class _AddListingScreenState extends State<AddListingScreen> {
     return uploaded;
   }
 
+  /// Get current location and update address
   Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
-      // Check permission
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -189,19 +198,52 @@ class _AddListingScreenState extends State<AddListingScreen> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      setState(() {
-        _latitudeController.text = position.latitude.toStringAsFixed(6);
-        _longitudeController.text = position.longitude.toStringAsFixed(6);
-      });
+      await _getAddressFromLatLng(position);
 
       debugPrint(
         "📍 Current Location: ${position.latitude}, ${position.longitude}",
       );
     } catch (e) {
+      _isLoading = false;
       debugPrint("Error getting location: $e");
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Error getting location: $e")));
+    }
+  }
+
+  /// Convert lat/lng to address
+  Future<void> _getAddressFromLatLng(Position position) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks.first;
+
+        String address =
+            "${place.street}, ${place.locality}, ${place.administrativeArea}";
+
+        setState(() {
+          _addressController.text = address;
+          _latitude = position.latitude.toString();
+          _longitude = position.longitude.toString();
+          _isLoading = false;
+        });
+      } else {
+        debugPrint("⚠️ No address found");
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("No address found")));
+      }
+    } catch (e) {
+      _isLoading = false;
+      debugPrint("❌ Error reverse geocoding: $e");
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error getting address")));
     }
   }
 
@@ -224,17 +266,14 @@ class _AddListingScreenState extends State<AddListingScreen> {
         "listingId": listingDocRef.id,
         "contributionId": contributionDocRef.id,
         "name": _nameController.text.trim(),
-        "description": "string",
+        "description": _descriptionController.text.trim(),
         "images": images,
-        "address": "string",
-        "geo": {
-          "lat": _latitudeController.text.trim(),
-          "lng": _longitudeController.text.trim(),
-        },
+        "address": _addressController.text.trim(),
+        "geo": {"lat": _latitude, "lng": _longitude},
         "phone": _phoneController.text.trim(),
         "category": _selectedCategory,
         "tags": [_selectedCategory],
-        "addedBy": "admin",
+        "addedBy": FirebaseAuth.instance.currentUser?.uid,
         "isClaimed": false,
         "ownerId": "string|null",
         "claimStatus": "pending",
@@ -285,7 +324,14 @@ class _AddListingScreenState extends State<AddListingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.WHITE,
-      appBar: AppBar(iconTheme:IconThemeData(color: AppColors.WHITE,), title: const Text("Upload Listing", style: TextStyle(color: AppColors.WHITE),), backgroundColor: AppColors.THEME_COLOR,),
+      appBar: AppBar(
+        iconTheme: IconThemeData(color: AppColors.WHITE),
+        title: const Text(
+          "Upload Listing",
+          style: TextStyle(color: AppColors.WHITE),
+        ),
+        backgroundColor: AppColors.THEME_COLOR,
+      ),
       body: Stack(
         children: [
           Padding(
@@ -383,27 +429,22 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     children: [
                       Expanded(
                         child: TextFormField(
-                          controller: _latitudeController,
+                          controller: _addressController,
                           decoration: const InputDecoration(
-                            labelText: "Latitude",
+                            labelText: "Address",
                             border: OutlineInputBorder(),
                           ),
+                          maxLines: 1,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _longitudeController,
-                          decoration: const InputDecoration(
-                            labelText: "Longitude",
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
+
                       IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.gps_fixed,
-                          color: Colors.black87,
+                          color:
+                              _addressController.text.isEmpty
+                                  ? AppColors.BLACK_54
+                                  : Colors.blue,
                         ),
                         onPressed: () {
                           _getCurrentLocation();
@@ -430,6 +471,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     decoration: const InputDecoration(
                       labelText: "Phone",
                       border: OutlineInputBorder(),
+                      prefixText: "+91 ",
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -455,13 +497,33 @@ class _AddListingScreenState extends State<AddListingScreen> {
                       return DropdownButtonFormField<String>(
                         isExpanded: true,
                         value: _selectedCategory,
+                        alignment: Alignment.center,
                         items:
                             categories
                                 .map(
                                   (cat) => DropdownMenuItem(
                                     value:
                                         cat.name, // store category name as value
-                                    child: Text(cat.name),
+                                    child: Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 30,
+                                          height: 30,
+                                          child: CachedNetworkSvg(
+                                            url: cat.imageUrl,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            cat.name,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    // Text(cat.name),
                                   ),
                                 )
                                 .toList(),
@@ -476,6 +538,18 @@ class _AddListingScreenState extends State<AddListingScreen> {
                         },
                       );
                     },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Description
+                  TextFormField(
+                    controller: _descriptionController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: "Description",
+                      border: OutlineInputBorder(),
+                    ),
                   ),
 
                   const SizedBox(height: 24),

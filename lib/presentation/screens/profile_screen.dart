@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:startup_20/presentation/common_methods/common_methods.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -123,7 +124,9 @@ class ProfileScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  CommonMethods.logout();
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   minimumSize: const Size.fromHeight(50),

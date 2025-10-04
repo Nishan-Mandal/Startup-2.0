@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/category_model.dart';
+import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
@@ -180,21 +181,36 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     ),
                     child:
                         category.imageUrl.isNotEmpty
-                            ? SvgPicture.network(
-                              category.imageUrl,
+                            ? CachedNetworkSvg(
+                              url: category.imageUrl,
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
                               // show your shimmer while loading
-                              placeholderBuilder:
-                                  (context) => Shimmer.fromColors(
-                                    baseColor: AppColors.GREY_SHADE_300,
-                                    highlightColor: AppColors.GREY_SHADE_100,
-                                    child: Container(
-                                      color: AppColors.GREY_SHADE_300,
-                                    ),
-                                  ),
+                              placeholder: Shimmer.fromColors(
+                                baseColor: AppColors.GREY_SHADE_300,
+                                highlightColor: AppColors.GREY_SHADE_100,
+                                child: Container(
+                                  color: AppColors.GREY_SHADE_300,
+                                ),
+                              ),
+                              errorWidget: const Icon(Icons.broken_image),
                             )
+                            // SvgPicture.network(
+                            //   category.imageUrl,
+                            //   fit: BoxFit.cover,
+                            //   width: double.infinity,
+                            //   height: double.infinity,
+                            //   // show your shimmer while loading
+                            //   placeholderBuilder:
+                            //       (context) => Shimmer.fromColors(
+                            //         baseColor: AppColors.GREY_SHADE_300,
+                            //         highlightColor: AppColors.GREY_SHADE_100,
+                            //         child: Container(
+                            //           color: AppColors.GREY_SHADE_300,
+                            //         ),
+                            //       ),
+                            // )
                             // CachedNetworkImage(
                             //   imageUrl: category.imageUrl,
                             //   fit: BoxFit.cover,

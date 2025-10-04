@@ -263,12 +263,29 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                listing.addedBy,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+              FutureBuilder<String?>(
+                future: CommonMethods.getUserName(listing.addedBy),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    );
+                  } else if (snapshot.hasError) {
+                    return const Text("Error");
+                  } else if (!snapshot.hasData || snapshot.data == null) {
+                    return const Text("Unknown");
+                  } else {
+                    return Text(
+                      snapshot.data!,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    );
+                  }
+                },
               ),
               const Text(
                 "Contributor",

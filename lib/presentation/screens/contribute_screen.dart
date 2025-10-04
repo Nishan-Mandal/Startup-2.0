@@ -31,7 +31,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
         actions: [
           Row(
             children: const [
-              Icon(Icons.handshake, color: AppColors.THEME_COLOR),
+              Icon(Icons.handshake, color: AppColors.AMBER),
               SizedBox(width: 4),
               Text(
                 "100",
@@ -59,7 +59,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                 children: [
                   Row(
                     children: const [
-                      Icon(Icons.handshake, color: AppColors.THEME_COLOR, size: 32),
+                      Icon(Icons.handshake, color: AppColors.AMBER, size: 32),
                       SizedBox(width: 12),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,7 +85,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.THEME_COLOR,
+                      backgroundColor: AppColors.AMBER,
                       foregroundColor: AppColors.BLACK,
                       elevation: 3,
                       shape: RoundedRectangleBorder(
@@ -238,7 +238,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
               top: 8,
               child: Row(
                 children: [
-                  const Icon(Icons.handshake, color: AppColors.THEME_COLOR, size: 16),
+                  const Icon(Icons.handshake, color: AppColors.AMBER, size: 16),
                   Text(
                     reward,
                     style: const TextStyle(

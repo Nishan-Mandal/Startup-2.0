@@ -233,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 20),
                     Container(
                       padding: EdgeInsets.only(bottom: 30, top: 20),
-                      color: AppColors.GREY_SHADE_300,
+                      color: AppColors.BLACK_12,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.center,

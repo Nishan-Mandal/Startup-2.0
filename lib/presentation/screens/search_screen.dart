@@ -6,6 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/category_model.dart';
+import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
@@ -21,7 +22,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
   bool isLoading = false;
-  final FocusNode _searchFocusNode = FocusNode(); 
+  final FocusNode _searchFocusNode = FocusNode();
 
   String query = "";
   List<String> recentSearches = ["Plumber", "Grocery", "Salon"];
@@ -29,7 +30,7 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Category> categoryResults = [];
   List<Listing> listingResults = [];
 
-    @override
+  @override
   void initState() {
     super.initState();
     // 👇 Auto focus when screen loads
@@ -306,30 +307,16 @@ class _SearchScreenState extends State<SearchScreen> {
                                       ),
                                     );
                                   },
-                                  leading: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: CachedNetworkImage(
-                                      imageUrl: category.imageUrl,
-                                      width: 30,
-                                      height: 30,
-                                      fit: BoxFit.cover,
-                                      placeholder:
-                                          (context, url) => Container(
-                                            width: 30,
-                                            height: 30,
-                                            color: AppColors.GREY_SHADE_300,
-                                          ),
-                                      errorWidget:
-                                          (context, url, error) => const Icon(
-                                            Icons.broken_image,
-                                            color: AppColors.GREY,
-                                          ),
+                                  leading: SizedBox(
+                                    width: 30,
+                                    height: 30,
+                                    child: CachedNetworkSvg(
+                                      url: category.imageUrl,
                                     ),
                                   ),
                                   title: Text(category.name),
                                 );
                               }),
-
                               const SizedBox(height: 20),
 
                               // ✅ Listings

@@ -5,45 +5,29 @@ import 'package:provider/provider.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/screens/bottom_nav_screen.dart';
+import 'package:startup_20/presentation/screens/logins/signup_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 import 'otp_screen.dart';
 
-class SignUpScreen extends StatefulWidget {
-  final String phoneNumber;
-  const SignUpScreen({super.key, required this.phoneNumber});
+class SignInScreen extends StatefulWidget {
+  const SignInScreen({super.key});
 
   @override
-  _SignUpScreenState createState() => _SignUpScreenState();
+  _SignInScreenState createState() => _SignInScreenState();
 }
 
-class _SignUpScreenState extends State<SignUpScreen> {
-  final TextEditingController nameController = TextEditingController();
+class _SignInScreenState extends State<SignInScreen> {
   final TextEditingController phoneController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   bool isLoading = false;
 
   @override
-  void initState() {
-    super.initState();
-    phoneController.text = widget.phoneNumber;
-  }
-
-  @override
   void dispose() {
-    nameController.dispose();
     phoneController.dispose();
     super.dispose();
   }
 
   Future<void> _sendOTP() async {
-    if (nameController.text.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Please enter your name")));
-      return;
-    }
-    setState(() => isLoading = true);
-
     if (phoneController.text.isEmpty || phoneController.text.length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter a valid mobile number")),
@@ -51,11 +35,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
 
-    setState(() => isLoading = true);
-
     try {
       await _auth.verifyPhoneNumber(
-        phoneNumber: "+91${phoneController.text}", // India code
+        phoneNumber: "+91${phoneController.text}",
         verificationCompleted: (PhoneAuthCredential credential) async {
           await _auth.signInWithCredential(credential);
         },
@@ -72,9 +54,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               builder:
                   (_) => OtpScreen(
                     verificationId: verificationId,
-                    userName:
-                        nameController.text
-                            .trim(), // pass name to next screen if needed
+                    userName: "",
                     phoneNumber: phoneController.text.trim(),
                   ),
             ),
@@ -83,11 +63,27 @@ class _SignUpScreenState extends State<SignUpScreen> {
         codeAutoRetrievalTimeout: (String verificationId) {},
       );
     } catch (e) {
-      setState(() => isLoading = false);
       debugPrint("Error sending OTP: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Failed to send OTP. Try again.")),
       );
+    }
+  }
+
+  Future<bool> checkUserExists(String phoneNumber) async {
+    try {
+      final querySnapshot =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .where('phone', isEqualTo: phoneNumber)
+              .limit(1)
+              .get();
+
+      return querySnapshot.docs.isNotEmpty;
+    } catch (e) {
+      setState(() => isLoading = false);
+      print("Error checking user existence: $e");
+      return false;
     }
   }
 
@@ -104,7 +100,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                 Row(
+                Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -126,6 +122,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                   ],
                 ),
+                // 👋 Illustration or logo
                 SizedBox(
                   height: 200,
                   width: 200,
@@ -138,11 +135,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     errorWidget: const Icon(Icons.broken_image),
                   ),
                 ),
-
                 const SizedBox(height: 30),
 
+                // ✨ Heading
                 const Text(
-                  "Sign Up!",
+                  "Welcome Back!",
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -152,23 +149,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  "Sign up and help your neighbors today",
+                  "Sign in to continue using your account",
                   style: TextStyle(fontSize: 16, color: Colors.black54),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 40),
-                TextField(
-                  controller: nameController,
-                  keyboardType: TextInputType.name,
-                  decoration: const InputDecoration(
-                    labelText: "Name",
-                    border: OutlineInputBorder(),
-                    hintText: "Enter your name",
-                    hintStyle: TextStyle(color: Colors.black38),
-                  ),
-                ),
-                const SizedBox(height: 20),
 
+                // 📱 Phone Input Card
                 TextFormField(
                   controller: phoneController,
                   keyboardType: TextInputType.phone,
@@ -182,11 +169,36 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // Send OTP Button
+                // 🔴 Send OTP Button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: isLoading ? null : _sendOTP,
+                    onPressed: () async {
+                      if (!isLoading) {
+                        setState(() => isLoading = true);
+                        Future<bool> isUserExist = checkUserExists(
+                          phoneController.text.trim(),
+                        );
+                        if (await isUserExist) {
+                          _sendOTP();
+                        } else {
+                          setState(() => isLoading = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                "This number isn’t registered. Please sign up first.",
+                              ),
+                            ),
+                          );
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SignUpScreen(phoneNumber: phoneController.text,),
+                            ),
+                          );
+                        }
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
                       elevation: 4,
@@ -206,7 +218,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               ),
                             )
                             : const Text(
-                              "Submit",
+                              "Send OTP",
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -218,16 +230,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 20),
 
+                // 🔗 Sign Up Option
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Already have an account? "),
+                    const Text("Don't have an account? "),
                     GestureDetector(
                       onTap: () {
-                        Navigator.pop(context); // go back to Sign In screen
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SignUpScreen(phoneNumber: "",),
+                          ),
+                        );
                       },
                       child: const Text(
-                        "Sign In",
+                        "Sign Up",
                         style: TextStyle(
                           color: Colors.redAccent,
                           fontWeight: FontWeight.bold,
