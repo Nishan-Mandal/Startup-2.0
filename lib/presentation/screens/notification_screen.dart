@@ -145,7 +145,7 @@ class NotificationsScreen extends StatelessWidget {
                     boxShadow: [
                       if (!isRead)
                         BoxShadow(
-                          color: AppColors.THEME_COLOR.withOpacity(0.15),
+                          color: AppColors.BLACK_12.withOpacity(0.15),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         ),
