@@ -42,11 +42,4 @@ class CommonMethods {
     }
   }
 
-  static guestLogin() async {
-    await FirebaseAuth.instance.signInAnonymously();
-  }
-
-  static logout() async {
-    await FirebaseAuth.instance.signOut();
-  }
 }

@@ -1206,6 +1206,9 @@ PODS:
   - Firebase/Firestore (12.2.0):
     - Firebase/CoreOnly
     - FirebaseFirestore (~> 12.2.0)
+  - Firebase/Messaging (12.2.0):
+    - Firebase/CoreOnly
+    - FirebaseMessaging (~> 12.2.0)
   - Firebase/Storage (12.2.0):
     - Firebase/CoreOnly
     - FirebaseStorage (~> 12.2.0)
@@ -1215,6 +1218,10 @@ PODS:
     - Flutter
   - firebase_core (4.1.1):
     - Firebase/CoreOnly (= 12.2.0)
+    - Flutter
+  - firebase_messaging (16.0.2):
+    - Firebase/Messaging (= 12.2.0)
+    - firebase_core
     - Flutter
   - firebase_storage (13.0.1):
     - Firebase/Storage (= 12.2.0)
@@ -1259,6 +1266,20 @@ PODS:
     - gRPC-Core (~> 1.69.0)
     - leveldb-library (~> 1.22)
     - nanopb (~> 3.30910.0)
+  - FirebaseInstallations (12.2.0):
+    - FirebaseCore (~> 12.2.0)
+    - GoogleUtilities/Environment (~> 8.1)
+    - GoogleUtilities/UserDefaults (~> 8.1)
+    - PromisesObjC (~> 2.4)
+  - FirebaseMessaging (12.2.0):
+    - FirebaseCore (~> 12.2.0)
+    - FirebaseInstallations (~> 12.2.0)
+    - GoogleDataTransport (~> 10.1)
+    - GoogleUtilities/AppDelegateSwizzler (~> 8.1)
+    - GoogleUtilities/Environment (~> 8.1)
+    - GoogleUtilities/Reachability (~> 8.1)
+    - GoogleUtilities/UserDefaults (~> 8.1)
+    - nanopb (~> 3.30910.0)
   - FirebaseSharedSwift (12.2.0)
   - FirebaseStorage (12.2.0):
     - FirebaseAppCheckInterop (~> 12.2.0)
@@ -1273,11 +1294,16 @@ PODS:
     - Mantle
     - SDWebImage
     - SDWebImageWebPCoder
+  - flutter_local_notifications (0.0.1):
+    - Flutter
   - geocoding_ios (1.0.5):
     - Flutter
   - geolocator_apple (1.2.0):
     - Flutter
     - FlutterMacOS
+  - GoogleDataTransport (10.1.0):
+    - nanopb (~> 3.30910.0)
+    - PromisesObjC (~> 2.4)
   - GoogleUtilities/AppDelegateSwizzler (8.1.0):
     - GoogleUtilities/Environment
     - GoogleUtilities/Logger
@@ -1297,6 +1323,9 @@ PODS:
     - GoogleUtilities/Privacy
   - GoogleUtilities/Privacy (8.1.0)
   - GoogleUtilities/Reachability (8.1.0):
+    - GoogleUtilities/Logger
+    - GoogleUtilities/Privacy
+  - GoogleUtilities/UserDefaults (8.1.0):
     - GoogleUtilities/Logger
     - GoogleUtilities/Privacy
   - "gRPC-C++ (1.69.0)":
@@ -1420,6 +1449,7 @@ PODS:
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
+  - PromisesObjC (2.4.0)
   - RecaptchaInterop (101.0.0)
   - SDWebImage (5.21.2):
     - SDWebImage/Core (= 5.21.2)
@@ -1437,9 +1467,11 @@ DEPENDENCIES:
   - cloud_firestore (from `.symlinks/plugins/cloud_firestore/ios`)
   - firebase_auth (from `.symlinks/plugins/firebase_auth/ios`)
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
+  - firebase_messaging (from `.symlinks/plugins/firebase_messaging/ios`)
   - firebase_storage (from `.symlinks/plugins/firebase_storage/ios`)
   - Flutter (from `Flutter`)
   - flutter_image_compress_common (from `.symlinks/plugins/flutter_image_compress_common/ios`)
+  - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
   - geocoding_ios (from `.symlinks/plugins/geocoding_ios/ios`)
   - geolocator_apple (from `.symlinks/plugins/geolocator_apple/darwin`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
@@ -1461,8 +1493,11 @@ SPEC REPOS:
     - FirebaseCoreInternal
     - FirebaseFirestore
     - FirebaseFirestoreInternal
+    - FirebaseInstallations
+    - FirebaseMessaging
     - FirebaseSharedSwift
     - FirebaseStorage
+    - GoogleDataTransport
     - GoogleUtilities
     - "gRPC-C++"
     - gRPC-Core
@@ -1471,6 +1506,7 @@ SPEC REPOS:
     - libwebp
     - Mantle
     - nanopb
+    - PromisesObjC
     - RecaptchaInterop
     - SDWebImage
     - SDWebImageWebPCoder
@@ -1482,12 +1518,16 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/firebase_auth/ios"
   firebase_core:
     :path: ".symlinks/plugins/firebase_core/ios"
+  firebase_messaging:
+    :path: ".symlinks/plugins/firebase_messaging/ios"
   firebase_storage:
     :path: ".symlinks/plugins/firebase_storage/ios"
   Flutter:
     :path: Flutter
   flutter_image_compress_common:
     :path: ".symlinks/plugins/flutter_image_compress_common/ios"
+  flutter_local_notifications:
+    :path: ".symlinks/plugins/flutter_local_notifications/ios"
   geocoding_ios:
     :path: ".symlinks/plugins/geocoding_ios/ios"
   geolocator_apple:
@@ -1510,6 +1550,7 @@ SPEC CHECKSUMS:
   Firebase: 26f6f8d460603af3df970ad505b16b15f5e2e9a1
   firebase_auth: 069b05a861a7c2f7a73112dd616a49a40f35ae52
   firebase_core: dfc4bd142bee4bc53a5d482397ca322c2dd3165d
+  firebase_messaging: 38c66c1184695b0c87abe51d40fc590718abed1a
   firebase_storage: b75bbed2ad6014962b80951ab5cd179d6ff3f39a
   FirebaseAppCheckInterop: a1b2598c64c5a8c42fd6f6a1c3d0938ae4324678
   FirebaseAuth: 059c11702bdb759bb49b6c7ec6ff67abf21f39c4
@@ -1519,12 +1560,16 @@ SPEC CHECKSUMS:
   FirebaseCoreInternal: 56ea29f3dad2894f81b060f706f9d53509b6ed3b
   FirebaseFirestore: 2baa1360623e942007726627653d43a5bc618ba8
   FirebaseFirestoreInternal: 6506aef21ac270bf137c34cd7283723d930eddb0
+  FirebaseInstallations: 3e884b01feabdf67582a80f3250425a00979b4ed
+  FirebaseMessaging: 43ec73bbfedd0c385a849bb91593ab4ad4b9e48e
   FirebaseSharedSwift: 52d868d4c269fcb4e4e1310c548435a9c1f46e25
   FirebaseStorage: f1578d57e1fd3683fc05f5d4d7b24b7490b321ac
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
   flutter_image_compress_common: 1697a328fd72bfb335507c6bca1a65fa5ad87df1
+  flutter_local_notifications: a5a732f069baa862e728d839dd2ebb904737effb
   geocoding_ios: 33776c9ebb98d037b5e025bb0e7537f6dd19646e
   geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e
+  GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   "gRPC-C++": cc207623316fb041a7a3e774c252cf68a058b9e8
   gRPC-Core: 860978b7db482de8b4f5e10677216309b5ff6330
@@ -1536,6 +1581,7 @@ SPEC CHECKSUMS:
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
+  PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   SDWebImage: 9f177d83116802728e122410fb25ad88f5c7608a
   SDWebImageWebPCoder: e38c0a70396191361d60c092933e22c20d5b1380

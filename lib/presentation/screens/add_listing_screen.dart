@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
@@ -24,8 +25,8 @@ class _AddListingScreenState extends State<AddListingScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  late String _latitude;
-  late String _longitude;
+  late double _latitude;
+  late double _longitude;
   late Future<List<models.Category>> _categoriesFuture;
   String? _selectedCategory;
   bool _isLoading = false;
@@ -228,8 +229,8 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
         setState(() {
           _addressController.text = address;
-          _latitude = position.latitude.toString();
-          _longitude = position.longitude.toString();
+          _latitude = position.latitude.toDouble();
+          _longitude = position.longitude.toDouble();
           _isLoading = false;
         });
       } else {
@@ -248,77 +249,109 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
 
   /// Submit contribution
-  Future<void> _submitContribution() async {
-    setState(() {
-      _isLoading = true;
-    });
+Future<void> _submitContribution() async {
+  setState(() {
+    _isLoading = true;
+  });
 
-    try {
-      final listingDocRef =
-          await FirebaseFirestore.instance.collection("listings").doc();
+  try {
+    // ✅ Validate mandatory fields
+    if (_addressController.text.trim().isEmpty ||
+        _nameController.text.trim().isEmpty ||
+        _phoneController.text.trim().isEmpty ||
+        _selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please fill in all required fields."),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
 
-      final contributionDocRef =
-          await FirebaseFirestore.instance.collection("contributions").doc();
+    final firestore = FirebaseFirestore.instance;
 
-      final images = await _uploadImages(listingDocRef.id);
+    final listingDocRef = firestore.collection("listings").doc();
+    final contributionDocRef = firestore.collection("contributions").doc();
 
-      final listingData = {
-        "listingId": listingDocRef.id,
-        "contributionId": contributionDocRef.id,
-        "name": _nameController.text.trim(),
-        "description": _descriptionController.text.trim(),
-        "images": images,
-        "address": _addressController.text.trim(),
-        "geo": {"lat": _latitude, "lng": _longitude},
-        "phone": _phoneController.text.trim(),
-        "category": _selectedCategory,
-        "tags": [_selectedCategory],
-        "addedBy": FirebaseAuth.instance.currentUser?.uid,
-        "isClaimed": false,
-        "ownerId": "string|null",
-        "claimStatus": "pending",
-        "verifiedBy": "string|null",
-        "reviews": null,
-        "rating": null,
-        "createdAt": FieldValue.serverTimestamp(),
-        "updatedAt": FieldValue.serverTimestamp(),
-      };
-      await listingDocRef.set(listingData);
+    // ✅ Upload images
+    final imageList = await _uploadImages(listingDocRef.id);
 
-      final contributionData = {
-        "contributionId": contributionDocRef.id,
-        "userId": "mockUser123",
-        "listingId": listingDocRef.id,
-        "type": "add",
-        "status": "pending",
-        "reviewedBy": null,
-        "createdAt": FieldValue.serverTimestamp(),
-        "updatedAt": FieldValue.serverTimestamp(),
-      };
+    // Convert uploaded image maps → ImageFile models
+    final images = imageList
+        .map<ImageFile>(
+          (img) => ImageFile(
+            fileId: img['fileId'],
+            fullUrl: img['fullUrl'],
+            thumbUrl: img['thumbUrl'],
+          ),
+        )
+        .toList();
 
-      await contributionDocRef.set(contributionData);
+    // ✅ Create the Listing model object
+    final listing = Listing(
+      listingId: listingDocRef.id,
+      contributionId: contributionDocRef.id,
+      name: _nameController.text.trim(),
+      address: _addressController.text.trim(),
+      description: _descriptionController.text.trim(),
+      geo: Geo(lat: _latitude ?? 0.0, lng: _longitude ?? 0.0),
+      phone: _phoneController.text.trim(),
+      category: _selectedCategory!,
+      tags: [_selectedCategory!],
+      addedBy: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
+      isClaimed: false,
+      ownerId: null,
+      claimStatus: "pending",
+      verifiedBy: null,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      images: images,
+      reviews: 0,
+      rating: 0,
+    );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Contribution submitted for review ✅")),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      debugPrint("Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+    // ✅ Create Contribution data
+    final contributionData = {
+      "contributionId": contributionDocRef.id,
+      "userId": FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
+      "listingId": listingDocRef.id,
+      "type": "add",
+      "status": "pending",
+      "reviewedBy": null,
+      "createdAt": FieldValue.serverTimestamp(),
+      "updatedAt": FieldValue.serverTimestamp(),
+    };
+
+    // ✅ Save both documents
+    await listingDocRef.set(listing.toJson());
+    await contributionDocRef.set(contributionData);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("✅ Contribution submitted for review!"),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context);
+    }
+  } catch (e, st) {
+    debugPrint("❌ Error while submitting contribution: $e\n$st");
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -431,10 +464,12 @@ class _AddListingScreenState extends State<AddListingScreen> {
                         child: TextFormField(
                           controller: _addressController,
                           decoration: const InputDecoration(
-                            labelText: "Address",
+                            labelText: "*Address",
                             border: OutlineInputBorder(),
                           ),
                           maxLines: 1,
+                          enabled: false, // ensure this is true (default)
+                          readOnly: true,
                         ),
                       ),
 
@@ -458,7 +493,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   TextFormField(
                     controller: _nameController,
                     decoration: const InputDecoration(
-                      labelText: "Shop/Service Name",
+                      labelText: "*Shop/Service Name",
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -469,7 +504,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
-                      labelText: "Phone",
+                      labelText: "*Phone",
                       border: OutlineInputBorder(),
                       prefixText: "+91 ",
                     ),
@@ -528,7 +563,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                                 )
                                 .toList(),
                         decoration: const InputDecoration(
-                          labelText: "Category",
+                          labelText: "*Category",
                           border: OutlineInputBorder(),
                         ),
                         onChanged: (value) {

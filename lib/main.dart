@@ -1,38 +1,104 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:startup_20/presentation/screens/bottom_nav_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:startup_20/core/services/notification_service.dart';
+import 'package:startup_20/data/models/listing_model.dart';
+import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
-import 'package:startup_20/presentation/screens/logins/signup_screen.dart';
-import 'package:startup_20/providers/bottom_nav_provider.dart';
+import 'package:startup_20/presentation/screens/notification_screen.dart';
+
+import 'providers/auth_provider.dart';
+import 'providers/bottom_nav_provider.dart';
+import 'presentation/screens/bottom_nav_screen.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  await NotificationService.initialize();
 
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppAuthProvider()),
+        ChangeNotifierProvider(create: (_) => BottomNavProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AppAuthProvider>(context);
+
     return MaterialApp(
-      title: 'Flutter Demo',
       debugShowCheckedModeBanner: false,
+      title: 'Startup 20',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: 
-          FirebaseAuth.instance.currentUser == null
-              ? SignInScreen()
-              : ChangeNotifierProvider(
-                create: (_) => BottomNavProvider(),
-                child: const BottomNavScreen(),
-              ),
+      navigatorKey: navigatorKey,
+      routes: {
+        '/notifications': (context) => const NotificationsScreen(),
+      },
+
+      onGenerateRoute: (settings) {
+        if (settings.name == '/listingDetail') {
+          final args = settings.arguments as Map<String, dynamic>?;
+
+          if (args != null && args['listingId'] != null) {
+            final listingId = args['listingId'] as String;
+
+            // Fetch the listing from Firestore
+            return MaterialPageRoute(
+              builder:
+                  (context) => FutureBuilder<DocumentSnapshot>(
+                    future:
+                        FirebaseFirestore.instance
+                            .collection('listings')
+                            .doc(listingId)
+                            .get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Scaffold(
+                          body: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+
+                      if (!snapshot.hasData || !snapshot.data!.exists) {
+                        return const Scaffold(
+                          body: Center(child: Text("Listing not found")),
+                        );
+                      }
+
+                      final listing = Listing.fromJson(
+                        snapshot.data!.data() as Map<String, dynamic>,
+                      );
+
+                      // Pass the actual Listing object
+                      return ListingDetailScreen(
+                        listing: listing,
+                        similarListings: [],
+                      );
+                    },
+                  ),
+            );
+          }
+        }
+
+        // fallback
+        return MaterialPageRoute(builder: (_) => const SignInScreen());
+      },
+
+      home: authProvider.user == null ? const SignInScreen() : const BottomNavScreen(),
     );
   }
 }

@@ -4,7 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
+import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/bottom_nav_screen.dart';
+import 'package:startup_20/providers/auth_provider.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 import 'otp_screen.dart';
 
@@ -93,7 +95,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final authProvider = Provider.of<AppAuthProvider>(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -104,13 +106,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                 Row(
+                Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     InkWell(
-                      onTap: () {
-                        CommonMethods.guestLogin();
+                      onTap: () async {
+                        CommonWidgets.showLoader(context);
+                        await authProvider.signInAnonymously();
+                        CommonWidgets.hideLoader();
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(

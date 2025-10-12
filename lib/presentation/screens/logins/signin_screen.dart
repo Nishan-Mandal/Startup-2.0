@@ -4,8 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
+import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/bottom_nav_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signup_screen.dart';
+import 'package:startup_20/providers/auth_provider.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 import 'otp_screen.dart';
 
@@ -63,6 +65,7 @@ class _SignInScreenState extends State<SignInScreen> {
         codeAutoRetrievalTimeout: (String verificationId) {},
       );
     } catch (e) {
+      setState(() => isLoading = false);
       debugPrint("Error sending OTP: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Failed to send OTP. Try again.")),
@@ -89,7 +92,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final authProvider = Provider.of<AppAuthProvider>(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -105,8 +108,10 @@ class _SignInScreenState extends State<SignInScreen> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     InkWell(
-                      onTap: () {
-                        CommonMethods.guestLogin();
+                      onTap: () async {
+                        CommonWidgets.showLoader(context);
+                        await authProvider.signInAnonymously();
+                        CommonWidgets.hideLoader();
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(

@@ -15,6 +15,11 @@ dependencies {
   // When using the BoM, don't specify versions in Firebase dependencies
   implementation("com.google.firebase:firebase-analytics")
 
+  //Local Notification
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+  implementation("androidx.window:window:1.0.0")
+  implementation("androidx.window:window-java:1.0.0")
+
 
   // Add the dependencies for any other desired Firebase products
   // https://firebase.google.com/docs/android/setup#available-libraries
@@ -23,10 +28,14 @@ dependencies {
 
 android {
     namespace = "com.example.startup2"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 35
     ndkVersion = "27.0.12077973"
 
     compileOptions {
+        //Local Notification
+        // Flag to enable support for the new language APIs
+        isCoreLibraryDesugaringEnabled = true
+
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }

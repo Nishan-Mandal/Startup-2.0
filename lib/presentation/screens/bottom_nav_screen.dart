@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/screens/category_screen.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_screen.dart';
 import 'package:startup_20/presentation/screens/contribute_screen.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
+import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
+import 'package:startup_20/providers/auth_provider.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
 
@@ -18,6 +21,7 @@ class BottomNavScreen extends StatefulWidget {
 }
 
 class _BottomNavScreenState extends State<BottomNavScreen> {
+  
   int selected = 0;
   final controller = PageController();
 
@@ -30,6 +34,8 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
   @override
   Widget build(BuildContext context) {
     final navProvider = Provider.of<BottomNavProvider>(context);
+    final authProvider = Provider.of<AppAuthProvider>(context);
+
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -104,9 +110,13 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
             children: [
               HomeScreen(),
               CategoryScreen(),
-              // ChatListScreen(currentUserId: FirebaseAuth.instance.currentUser!.uid,),
-              ChatScreen(currentUserId: FirebaseAuth.instance.currentUser!.uid),
-              ContributionScreen(),
+
+              authProvider.isAnonymous
+                  ? SignInScreen()
+                  : ChatScreen(
+                    currentUserId: FirebaseAuth.instance.currentUser!.uid,
+                  ),
+              authProvider.isAnonymous ? SignInScreen() : ContributionScreen(),
             ],
           ),
         ),

@@ -1,8 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/notification_screen.dart';
 import 'package:startup_20/presentation/screens/profile_screen.dart';
+import 'package:startup_20/providers/auth_provider.dart';
 
 class CommonWidgets {
   CommonWidgets._(); // private constructor so it can't be instantiated
@@ -52,7 +57,11 @@ class CommonWidgets {
   }
 
   /// 🔹 Notifications Button
-  static Widget _notifications(BuildContext context) {
+static Widget _notifications(BuildContext context) {
+  final authProvider = Provider.of<AppAuthProvider>(context);
+
+  if (authProvider.user == null || authProvider.isAnonymous) {
+    // If not logged in or anonymous → no unread count stream
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -77,13 +86,90 @@ class CommonWidgets {
     );
   }
 
+  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+    stream: FirebaseFirestore.instance
+        .collection('users')
+        .doc(authProvider.user?.uid)
+        .collection('notifications')
+        .where('isRead', isEqualTo: false)
+        .snapshots(),
+    builder: (context, snapshot) {
+      int unreadCount = 0;
+      if (snapshot.hasData) {
+        unreadCount = snapshot.data!.docs.length;
+      }
+
+      return GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+          );
+        },
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              height: 30,
+              width: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.GREY_SHADE_100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.notifications_outlined,
+                size: 20,
+                color: AppColors.BLACK,
+              ),
+            ),
+
+            // 🔴 Red badge for unread count
+            if (unreadCount > 0)
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  child: Center(
+                    child: Text(
+                      unreadCount > 9 ? '9+' : unreadCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+
   /// 🔹 Profile Button
   static Widget _profile(BuildContext context) {
+    final authProvider = Provider.of<AppAuthProvider>(context);
     return IconButton(
       onPressed: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const ProfileScreen()),
+          MaterialPageRoute(
+            builder:
+                (context) =>
+                    authProvider.isAnonymous
+                        ? SignInScreen()
+                        : const ProfileScreen(),
+          ),
         );
       },
       icon: const Icon(Icons.person_outline, color: AppColors.BLACK),
@@ -478,5 +564,56 @@ class CommonWidgets {
         ],
       ),
     );
+  }
+
+  static OverlayEntry? _overlayEntry;
+
+  /// Show loader overlay
+  static void showLoader(BuildContext context, {String? message}) {
+    if (_overlayEntry != null) return; // Prevent multiple overlays
+
+    _overlayEntry = OverlayEntry(
+      builder:
+          (_) => Stack(
+            children: [
+              // Dim background
+              Opacity(
+                opacity: 0.5,
+                child: ModalBarrier(color: Colors.black, dismissible: false),
+              ),
+              // Centered circular progress indicator
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ),
+                    if (message != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        message,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+    );
+
+    Overlay.of(context, rootOverlay: true).insert(_overlayEntry!);
+  }
+
+  /// Hide loader overlay
+  static void hideLoader() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
   }
 }

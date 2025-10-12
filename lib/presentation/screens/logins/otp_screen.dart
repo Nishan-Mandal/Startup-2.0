@@ -36,7 +36,16 @@ class _OtpScreenState extends State<OtpScreen> {
         smsCode: otp,
       );
 
-      await _auth.signInWithCredential(credential);
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user != null && user.isAnonymous) {
+        // 🔗 Link phone credential to the existing anonymous user
+        await user.linkWithCredential(credential);
+        debugPrint("✅ Anonymous user successfully linked with phone number.");
+      } else {
+        // Normal sign-in flow (if not anonymous)
+        await _auth.signInWithCredential(credential);
+      }
 
       _saveUserData(widget.userName, widget.phoneNumber);
       Navigator.pushReplacement(

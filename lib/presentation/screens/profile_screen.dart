@@ -1,17 +1,28 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
+import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
+import 'package:startup_20/providers/auth_provider.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AppAuthProvider>(context);
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
         title: const Text("Profile"),
         centerTitle: true,
-        backgroundColor: Colors.orange,
+        backgroundColor: AppColors.THEME_COLOR,
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -23,8 +34,10 @@ class ProfileScreen extends StatelessWidget {
               child: Row(
                 children: [
                   const CircleAvatar(
-                    radius: 40,
-                    backgroundImage: NetworkImage("https://i.pravatar.cc/150?img=12"),
+                    radius: 30,
+                    backgroundImage: NetworkImage(
+                      "https://i.pravatar.cc/150?img=12",
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -40,16 +53,9 @@ class ProfileScreen extends StatelessWidget {
                         ),
                         const Text("Haldia, West Bengal"),
                         const SizedBox(height: 8),
-                        ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                          ),
-                          child: const Text("Edit Profile"),
-                        )
                       ],
                     ),
-                  )
+                  ),
                 ],
               ),
             ),
@@ -88,7 +94,7 @@ class ProfileScreen extends StatelessWidget {
                         child: const Text("Redeem"),
                       ),
                     ],
-                  )
+                  ),
                 ],
               ),
             ),
@@ -125,10 +131,14 @@ class ProfileScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: ElevatedButton(
                 onPressed: () {
-                  CommonMethods.logout();
+                  authProvider.signOut();
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => SignInScreen()),
+                  );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
+                  backgroundColor: AppColors.WHITE,
                   minimumSize: const Size.fromHeight(50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -155,9 +165,10 @@ class ProfileScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
           const Divider(),
           ...tiles,
         ],
