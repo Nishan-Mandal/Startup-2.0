@@ -147,8 +147,8 @@ class _OtpScreenState extends State<OtpScreen> {
                   activeFillColor: AppColors.WHITE,
                   inactiveFillColor: AppColors.WHITE,
                   selectedFillColor: AppColors.WHITE,
-                  activeColor: AppColors.RED,
-                  selectedColor: AppColors.RED,
+                  activeColor: AppColors.THEME_COLOR,
+                  selectedColor: AppColors.THEME_COLOR,
                   inactiveColor: AppColors.GREY_SHADE_300,
                 ),
                 animationDuration: const Duration(milliseconds: 300),
@@ -168,7 +168,7 @@ class _OtpScreenState extends State<OtpScreen> {
                           ? null
                           : () => _verifyOTP(otpController.text.trim()),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.RED,
+                    backgroundColor: AppColors.THEME_COLOR,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -200,7 +200,7 @@ class _OtpScreenState extends State<OtpScreen> {
                 },
                 child: const Text(
                   "Resend OTP",
-                  style: TextStyle(color: AppColors.RED, fontSize: 16),
+                  style: TextStyle(color: AppColors.THEME_COLOR, fontSize: 16),
                 ),
               ),
             ],

@@ -44,7 +44,7 @@ class MyApp extends StatelessWidget {
     final authProvider = Provider.of<AppAuthProvider>(context);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Startup 20',
+      title: 'EasyFind',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.THEME_COLOR),
       ),

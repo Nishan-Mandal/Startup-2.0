@@ -63,8 +63,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text("Profile"),
+          title: const Text("Profile",style: TextStyle(color: AppColors.WHITE),),
           centerTitle: true,
+          iconTheme: const IconThemeData(color: AppColors.WHITE),
           backgroundColor: AppColors.THEME_COLOR,
         ),
         body: Center(child: CircularProgressIndicator()),
@@ -78,8 +79,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: AppColors.GREY_SHADE_100,
       appBar: AppBar(
-        title: const Text("Profile"),
+        title: const Text("Profile",style: TextStyle(color: AppColors.WHITE)),
         centerTitle: true,
+        iconTheme: const IconThemeData(color: AppColors.WHITE),
         backgroundColor: AppColors.THEME_COLOR,
       ),
       body: SingleChildScrollView(
@@ -93,7 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   CircleAvatar(
                     radius: 30,
-                    child: Text(CommonMethods.getInitials(currentUser!.name)),
+                    child: Text(CommonMethods.getInitials(currentUser!.name),style: TextStyle(fontWeight: FontWeight.bold),),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -142,12 +144,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ElevatedButton(
                         onPressed: () {},
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
+                          backgroundColor: AppColors.THEME_COLOR,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        child: const Text("Redeem"),
+                        child: const Text("Redeem",style: TextStyle(color: AppColors.WHITE),),
                       ),
                     ],
                   ),
@@ -255,7 +257,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildTile(IconData icon, String text, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, color: Colors.orange),
+      leading: Icon(icon, color: AppColors.THEME_COLOR),
       title: Text(text),
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,

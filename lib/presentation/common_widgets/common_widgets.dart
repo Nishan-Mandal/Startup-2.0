@@ -36,7 +36,7 @@ class CommonWidgets {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    "Company",
+                    "EasyFind",
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -673,7 +673,7 @@ class _AnimatedSearchBarState extends State<_AnimatedSearchBar> {
           ),
 
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: AppColors.THEME_COLOR,
               borderRadius: BorderRadius.circular(8),

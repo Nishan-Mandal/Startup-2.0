@@ -2,13 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/presentation/common_methods/common_methods.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
   /// Stream user-specific notifications
-  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-  _getUserNotifications() {
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _getUserNotifications() {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null || user.isAnonymous) {
@@ -26,9 +26,7 @@ class NotificationsScreen extends StatelessWidget {
   }
 
   /// Marks a user-specific notification as read
-  Future<void> _markAsRead(
-    QueryDocumentSnapshot<Map<String, dynamic>> doc,
-  ) async {
+  Future<void> _markAsRead(QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -120,12 +118,7 @@ class NotificationsScreen extends StatelessWidget {
               final body = notif["body"] ?? "";
               final type = notif["type"] ?? "system";
               final isRead = notif["isRead"] ?? false;
-
               final createdAt = (notif["createdAt"] as Timestamp?)?.toDate();
-              final formattedTime =
-                  createdAt != null
-                      ? TimeOfDay.fromDateTime(createdAt).format(context)
-                      : "";
 
               IconData iconData;
               switch (type) {
@@ -173,14 +166,27 @@ class NotificationsScreen extends StatelessWidget {
                       title,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text(body),
-                    trailing: Text(
-                      formattedTime,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.BLACK_54,
-                      ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(body),
+                        const SizedBox(height: 4),
+                        Text(
+                          CommonMethods.formatMessageTime(createdAt),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.BLACK_54,
+                          ),
+                        ),
+                      ],
                     ),
+                    trailing: !isRead
+                        ? const Icon(
+                            Icons.circle,
+                            color: AppColors.THEME_COLOR,
+                            size: 12,
+                          )
+                        : null,
                   ),
                 ),
               );

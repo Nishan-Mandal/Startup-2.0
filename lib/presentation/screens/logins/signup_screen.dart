@@ -43,8 +43,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ).showSnackBar(const SnackBar(content: Text("Please enter your name")));
       return;
     }
-    setState(() => isLoading = true);
-
+    
     if (phoneController.text.isEmpty || phoneController.text.length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter a valid mobile number")),

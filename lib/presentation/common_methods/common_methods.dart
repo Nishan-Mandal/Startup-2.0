@@ -45,12 +45,20 @@ class CommonMethods {
   }
 
   static String getInitials(String fullName) {
-    if (fullName.isEmpty) return 'U'; // Default initial
+    if (fullName.trim().isEmpty) return 'U'; // Default initial if empty
+
     final parts = fullName.trim().split(RegExp(r'\s+')); // Split by spaces
-    final firstChar = parts[0].isNotEmpty ? parts[0][0] : '';
-    final secondChar =
-        parts.length > 1 && parts[1].isNotEmpty ? parts[1][0] : '';
-    return (firstChar + secondChar).toUpperCase();
+
+    final firstChar = parts.first.isNotEmpty ? parts.first[0] : '';
+
+    // If only one word, return single initial
+    if (parts.length == 1) {
+      return firstChar.toUpperCase();
+    }
+
+    final lastChar = parts.last.isNotEmpty ? parts.last[0] : '';
+
+    return (firstChar + lastChar).toUpperCase();
   }
 
   static String formatMessageTime(DateTime? time) {

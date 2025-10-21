@@ -221,7 +221,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.BLACK,
+                                  color: AppColors.WHITE,
                                 ),
                               ),
                             ),

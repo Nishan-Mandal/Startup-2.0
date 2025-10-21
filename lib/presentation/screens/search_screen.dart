@@ -57,7 +57,7 @@ class _SearchScreenState extends State<SearchScreen> {
       });
       return;
     }
-    text = text[0].toUpperCase() + text.substring(1);
+
     setState(() {
       isLoading = true;
       query = text;
@@ -66,56 +66,82 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      // 🔹 Categories: match by tags
+      // Capitalize first letter for prefix search
+      final capitalized = text[0].toUpperCase() + text.substring(1);
+      final lowerText = text.toLowerCase();
+
+      // 🔹 Fetch data (Firestore is case-sensitive)
       final categoryByTags =
           await FirebaseFirestore.instance
               .collection("categories")
-              .where("tags", arrayContains: text)
+              .where(
+                "tags",
+                arrayContainsAny: [
+                  text,
+                  text.toLowerCase(),
+                  text.toUpperCase(),
+                  capitalized,
+                ],
+              )
               .get();
 
-      // 🔹 Categories: match by name (prefix search)
       final categoryByName =
           await FirebaseFirestore.instance
               .collection("categories")
-              .where("name", isGreaterThanOrEqualTo: text)
-              .where("name", isLessThan: text + '\uf8ff')
+              .where("name", isGreaterThanOrEqualTo: capitalized)
+              .where("name", isLessThan: capitalized + '\uf8ff')
               .get();
 
-      // 🔹 Listings: match by tags
       final listingByTags =
           await FirebaseFirestore.instance
               .collection("listings")
-              .where("tags", arrayContains: text)
+              .where(
+                "tags",
+                arrayContainsAny: [
+                  text,
+                  text.toLowerCase(),
+                  text.toUpperCase(),
+                  capitalized,
+                ],
+              )
               .get();
 
-      // 🔹 Listings: match by name (prefix search)
       final listingByName =
           await FirebaseFirestore.instance
               .collection("listings")
-              .where("name", isGreaterThanOrEqualTo: text)
-              .where("name", isLessThan: text + '\uf8ff')
+              .where("name", isGreaterThanOrEqualTo: capitalized)
+              .where("name", isLessThan: capitalized + '\uf8ff')
               .get();
 
-      // ✅ Merge results (avoid duplicates by using a Set of IDs)
+      // 🔹 Merge results and filter case-insensitively in Dart
       final seenCategoryNames = <String>{};
       final seenListingIds = <String>{};
 
       final allCategories =
           [...categoryByTags.docs, ...categoryByName.docs]
               .map((doc) => Category.fromJson(doc.data()))
-              .where((category) => seenCategoryNames.add(category.name ?? ''))
+              .where(
+                (category) =>
+                    seenCategoryNames.add(category.name ?? '') &&
+                    (category.name?.toLowerCase().contains(lowerText) ?? false),
+              )
               .toList();
 
       final allListings =
           [...listingByTags.docs, ...listingByName.docs]
               .where((doc) => seenListingIds.add(doc.id))
               .map((doc) => Listing.fromJson(doc.data()))
+              .where(
+                (listing) =>
+                    listing.name?.toLowerCase().contains(lowerText) ?? false,
+              )
               .toList();
 
       setState(() {
         categoryResults = allCategories;
         listingResults = allListings;
         isLoading = false;
+
         // Save to recent searches
         if (!recentSearches.contains(text)) {
           recentSearches.insert(0, text);
@@ -124,9 +150,6 @@ class _SearchScreenState extends State<SearchScreen> {
           }
         }
       });
-
-      debugPrint("Categories: $categoryResults");
-      debugPrint("Listings: $listingResults");
     } catch (e) {
       debugPrint("Search error: $e");
       setState(() => isLoading = false);

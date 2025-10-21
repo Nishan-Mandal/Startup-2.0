@@ -145,7 +145,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.AMBER,
+                      backgroundColor: AppColors.THEME_COLOR,
                       foregroundColor: AppColors.BLACK,
                       elevation: 3,
                       shape: RoundedRectangleBorder(
@@ -153,7 +153,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                       ),
                     ),
                     onPressed: () {},
-                    child: const Text("Redeem"),
+                    child: const Text("Redeem", style: TextStyle(color: AppColors.WHITE),),
                   ),
                 ],
               ),
@@ -332,7 +332,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: const BoxDecoration(
-                  color: AppColors.AMBER,
+                  color: AppColors.THEME_COLOR,
                   borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(12),
                     bottomRight: Radius.circular(12),

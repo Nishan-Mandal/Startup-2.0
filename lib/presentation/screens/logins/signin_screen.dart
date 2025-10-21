@@ -34,6 +34,7 @@ class _SignInScreenState extends State<SignInScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter a valid mobile number")),
       );
+      setState(() => isLoading = false);
       return;
     }
 
