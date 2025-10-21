@@ -1,14 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/core/services/notification_service.dart';
 import 'package:startup_20/data/models/listing_model.dart';
+import 'package:startup_20/presentation/screens/conversation/chat_screen.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/notification_screen.dart';
+import 'package:startup_20/presentation/screens/onboarding_screen.dart';
+import 'package:startup_20/providers/chat_provider.dart';
 
 import 'providers/auth_provider.dart';
 import 'providers/bottom_nav_provider.dart';
@@ -26,6 +29,7 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AppAuthProvider()),
         ChangeNotifierProvider(create: (_) => BottomNavProvider()),
+        ChangeNotifierProvider(create: (_) => ChatProvider())
       ],
       child: const MyApp(),
     ),
@@ -38,16 +42,16 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AppAuthProvider>(context);
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Startup 20',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.THEME_COLOR),
       ),
       navigatorKey: navigatorKey,
       routes: {
         '/notifications': (context) => const NotificationsScreen(),
+        '/chatScreen': (context) => const ChatScreen(),
       },
 
       onGenerateRoute: (settings) {
@@ -98,7 +102,7 @@ class MyApp extends StatelessWidget {
         return MaterialPageRoute(builder: (_) => const SignInScreen());
       },
 
-      home: authProvider.user == null ? const SignInScreen() : const BottomNavScreen(),
+      home: authProvider.user == null ? const OnboardingScreen() : const BottomNavScreen(),
     );
   }
 }

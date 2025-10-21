@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
-import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/bottom_nav_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signup_screen.dart';
@@ -95,7 +95,7 @@ class _SignInScreenState extends State<SignInScreen> {
     final authProvider = Provider.of<AppAuthProvider>(context);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.WHITE,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -144,7 +144,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
                 // ✨ Heading
                 const Text(
-                  "Welcome Back!",
+                  "Welcome!",
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -155,7 +155,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 const SizedBox(height: 10),
                 const Text(
                   "Sign in to continue using your account",
-                  style: TextStyle(fontSize: 16, color: Colors.black54),
+                  style: TextStyle(fontSize: 16, color: AppColors.BLACK_54),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 40),
@@ -169,7 +169,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     border: OutlineInputBorder(),
                     prefixText: "+91 ",
                     hintText: "Enter mobile number",
-                    hintStyle: TextStyle(color: Colors.black38),
+                    hintStyle: TextStyle(color: AppColors.BLACK_54,)
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -205,7 +205,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
+                      backgroundColor: AppColors.THEME_COLOR,
                       elevation: 4,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -218,7 +218,7 @@ class _SignInScreenState extends State<SignInScreen> {
                               height: 24,
                               width: 24,
                               child: CircularProgressIndicator(
-                                color: Colors.white,
+                                color: AppColors.WHITE,
                                 strokeWidth: 2,
                               ),
                             )
@@ -227,7 +227,7 @@ class _SignInScreenState extends State<SignInScreen> {
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: AppColors.WHITE,
                               ),
                             ),
                   ),
@@ -252,7 +252,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       child: const Text(
                         "Sign Up",
                         style: TextStyle(
-                          color: Colors.redAccent,
+                          color: AppColors.THEME_COLOR,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

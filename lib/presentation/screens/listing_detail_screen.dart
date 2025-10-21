@@ -8,6 +8,8 @@ import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/review_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
+import 'package:startup_20/presentation/screens/conversation/chat_room_screen.dart';
+import 'package:startup_20/providers/auth_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ListingDetailScreen extends StatefulWidget {
@@ -27,9 +29,18 @@ class ListingDetailScreen extends StatefulWidget {
 class _ListingDetailScreenState extends State<ListingDetailScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-
+  late Future<String?> ownerName;
   double _selectedRating = 0;
+  bool _isChatLoading = false;
+  bool _isFavorite = false;
   final TextEditingController _reviewController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    ownerName = CommonMethods.getUserName(widget.listing.ownerId);
+    _checkIfFavorite();
+  }
 
   // ---------- Helper Methods ----------
   String getRatingLabel(double rating) {
@@ -38,6 +49,66 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     if (rating <= 3) return "Very Good";
     if (rating <= 4) return "Excellent";
     return "Outstanding";
+  }
+
+  Future<void> _checkIfFavorite() async {
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+    final doc =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('favorites')
+            .doc(widget.listing.listingId)
+            .get();
+
+    if (mounted) {
+      setState(() {
+        _isFavorite = doc.exists;
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if(AppAuthProvider.isAnonymousUser()){
+      CommonMethods.navigateToSignInScreen(context);
+      return;
+    }
+
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+    final favRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('favorites')
+        .doc(widget.listing.listingId);
+
+    try {
+      if (_isFavorite) {
+        setState(() => _isFavorite = false);
+        await favRef.delete();
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Removed from favorites")));
+      } else {
+        setState(() => _isFavorite = true);
+        await favRef.set({
+          'listingId': widget.listing.listingId,
+          'name': widget.listing.name,
+          'image': widget.listing.images.first.fullUrl,
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Added to favorites"),
+            backgroundColor: AppColors.GREEN,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error updating favorites: $e")));
+    }
   }
 
   Future<List<Listing>> fetchListings() async {
@@ -93,7 +164,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text("Review submitted successfully"),
-        backgroundColor: Colors.green,
+        backgroundColor: AppColors.GREEN,
       ),
     );
   }
@@ -233,7 +304,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           // Right side (Rating)
           Row(
             children: [
-              const Icon(Icons.star, color: AppColors.THEME_COLOR, size: 20),
+              const Icon(Icons.star, color: AppColors.AMBER, size: 20),
               const SizedBox(width: 4),
               Text(
                 listing.rating.toStringAsFixed(1),
@@ -257,14 +328,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           const CircleAvatar(
             radius: 25,
             backgroundColor: AppColors.GREY,
-            child: Icon(Icons.person, size: 28, color: Colors.white),
+            child: Icon(Icons.person, size: 28, color: AppColors.WHITE),
           ),
           const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               FutureBuilder<String?>(
-                future: CommonMethods.getUserName(listing.addedBy),
+                future: ownerName,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const SizedBox(
@@ -294,18 +365,25 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             ],
           ),
           const Spacer(),
-          TextButton.icon(
-            onPressed: () {},
-            icon: const Icon(
-              Icons.chat_bubble,
-              color: AppColors.THEME_COLOR,
-              size: 20,
-            ),
-            label: const Text(
-              "Chat",
-              style: TextStyle(color: AppColors.THEME_COLOR, fontSize: 17),
-            ),
-          ),
+          _isChatLoading
+              ? CircularProgressIndicator(
+                color: AppColors.THEME_COLOR,
+                padding: EdgeInsets.only(right: 20),
+              )
+              : TextButton.icon(
+                onPressed: () {
+                  _handleChat();
+                },
+                icon: const Icon(
+                  Icons.chat_bubble,
+                  color: AppColors.THEME_COLOR,
+                  size: 20,
+                ),
+                label: Text(
+                  "Chat",
+                  style: TextStyle(color: AppColors.THEME_COLOR, fontSize: 17),
+                ),
+              ),
         ],
       ),
     );
@@ -331,7 +409,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               onPressed: () => setState(() => _selectedRating = index + 1.0),
               icon: Icon(
                 index < _selectedRating ? Icons.star : Icons.star_border,
-                color: AppColors.THEME_COLOR,
+                color: AppColors.AMBER,
               ),
             );
           }),
@@ -406,7 +484,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       return Icon(
                         i < r.rating ? Icons.star : Icons.star_border,
                         size: 16,
-                        color: AppColors.THEME_COLOR,
+                        color: AppColors.AMBER,
                       );
                     }),
                   ),
@@ -564,6 +642,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final listing = widget.listing;
+    
 
     return Scaffold(
       backgroundColor: AppColors.WHITE,
@@ -571,18 +650,17 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         backgroundColor: AppColors.WHITE,
         elevation: 0,
         centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.BLACK),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: const Text(
           "Details",
           style: TextStyle(color: AppColors.BLACK, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.favorite_border, color: AppColors.BLACK),
-            onPressed: () {},
+            icon: Icon(
+              _isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: _isFavorite ? AppColors.RED : AppColors.BLACK,
+            ),
+            onPressed: _toggleFavorite,
           ),
         ],
       ),
@@ -593,9 +671,15 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             _buildImageCarousel(listing),
             const SizedBox(height: 15),
             _buildListingInfo(listing),
-            const SizedBox(height: 30),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: const Divider(height: 30),
+            ),
             _buildSellerSection(listing),
-            const SizedBox(height: 30),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: const Divider(height: 30),
+            ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
               child: Text(
@@ -647,6 +731,74 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         ),
       ),
       bottomNavigationBar: _buildBottomButtons(),
+    );
+  }
+
+  void _handleChat() async {
+    if(AppAuthProvider.isAnonymousUser()){
+      CommonMethods.navigateToSignInScreen(context);
+      return;
+    }
+    setState(() {
+      _isChatLoading = true;
+    });
+    final currentUser = FirebaseAuth.instance.currentUser!;
+    final ownerId = widget.listing.ownerId;
+
+    if (currentUser.uid == ownerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You cannot chat with yourself.")),
+      );
+      return;
+    }
+
+    final conversationRef = FirebaseFirestore.instance.collection(
+      "conversations",
+    );
+
+    // Check if conversation already exists between the two users
+    final existingConversation =
+        await conversationRef
+            .where("type", isEqualTo: "direct")
+            .where("participantIds", arrayContains: currentUser.uid)
+            .get();
+
+    String? existingId;
+    for (var doc in existingConversation.docs) {
+      final participants = List<String>.from(doc["participantIds"]);
+      if (participants.contains(ownerId)) {
+        existingId = doc.id;
+        break;
+      }
+    }
+
+    String conversationId;
+    if (existingId != null) {
+      conversationId = existingId;
+    } else {
+      // Create new conversation
+      final newDoc = conversationRef.doc();
+      conversationId = newDoc.id;
+    }
+
+    String? title = await ownerName;
+
+    setState(() {
+      _isChatLoading = false;
+    });
+
+    // Navigate to Chat Room
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (context) => ChatRoomScreen(
+              conversationId: conversationId,
+              otherUserId: widget.listing.ownerId,
+              type: "direct",
+              title: title ?? 'Owner',
+            ),
+      ),
     );
   }
 }

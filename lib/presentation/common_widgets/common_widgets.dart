@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -57,108 +58,114 @@ class CommonWidgets {
   }
 
   /// 🔹 Notifications Button
-static Widget _notifications(BuildContext context) {
-  final authProvider = Provider.of<AppAuthProvider>(context);
+  static Widget _notifications(BuildContext context) {
+    final authProvider = Provider.of<AppAuthProvider>(context);
 
-  if (authProvider.user == null || authProvider.isAnonymous) {
-    // If not logged in or anonymous → no unread count stream
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const NotificationsScreen()),
-        );
-      },
-      child: Container(
-        height: 30,
-        width: 30,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.GREY_SHADE_100,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: const Icon(
-          Icons.notifications_outlined,
-          size: 20,
-          color: AppColors.BLACK,
-        ),
-      ),
-    );
-  }
-
-  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-    stream: FirebaseFirestore.instance
-        .collection('users')
-        .doc(authProvider.user?.uid)
-        .collection('notifications')
-        .where('isRead', isEqualTo: false)
-        .snapshots(),
-    builder: (context, snapshot) {
-      int unreadCount = 0;
-      if (snapshot.hasData) {
-        unreadCount = snapshot.data!.docs.length;
-      }
-
+    if (AppAuthProvider.isAnonymousUser()) {
+      // If not logged in or anonymous → no unread count stream
       return GestureDetector(
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+            MaterialPageRoute(
+              builder: (context) => const NotificationsScreen(),
+            ),
           );
         },
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              height: 30,
-              width: 30,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.GREY_SHADE_100,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.notifications_outlined,
-                size: 20,
-                color: AppColors.BLACK,
-              ),
-            ),
+        child: Container(
+          height: 30,
+          width: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.GREY_SHADE_100,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            Icons.notifications_outlined,
+            size: 20,
+            color: AppColors.BLACK,
+          ),
+        ),
+      );
+    }
 
-            // 🔴 Red badge for unread count
-            if (unreadCount > 0)
-              Positioned(
-                right: -2,
-                top: -2,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                  ),
-                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                  child: Center(
-                    child: Text(
-                      unreadCount > 9 ? '9+' : unreadCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream:
+          FirebaseFirestore.instance
+              .collection('users')
+              .doc(authProvider.user?.uid)
+              .collection('notifications')
+              .where('isRead', isEqualTo: false)
+              .snapshots(),
+      builder: (context, snapshot) {
+        int unreadCount = 0;
+        if (snapshot.hasData) {
+          unreadCount = snapshot.data!.docs.length;
+        }
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const NotificationsScreen(),
+              ),
+            );
+          },
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                height: 30,
+                width: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.GREY_SHADE_100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.notifications_outlined,
+                  size: 20,
+                  color: AppColors.BLACK,
+                ),
+              ),
+
+              // 🔴 Red badge for unread count
+              if (unreadCount > 0)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: AppColors.RED,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 18,
+                      minHeight: 18,
+                    ),
+                    child: Center(
+                      child: Text(
+                        unreadCount > 9 ? '9+' : unreadCount.toString(),
+                        style: const TextStyle(
+                          color: AppColors.WHITE,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-      );
-    },
-  );
-}
-
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   /// 🔹 Profile Button
   static Widget _profile(BuildContext context) {
-    final authProvider = Provider.of<AppAuthProvider>(context);
     return IconButton(
       onPressed: () {
         Navigator.push(
@@ -166,7 +173,7 @@ static Widget _notifications(BuildContext context) {
           MaterialPageRoute(
             builder:
                 (context) =>
-                    authProvider.isAnonymous
+                    AppAuthProvider.isAnonymousUser()
                         ? SignInScreen()
                         : const ProfileScreen(),
           ),
@@ -206,7 +213,7 @@ static Widget _notifications(BuildContext context) {
               ],
           child: Row(
             children: [
-              const Icon(Icons.location_on_outlined, color: AppColors.BLACK),
+              const Icon(Icons.location_on_outlined, color: AppColors.BLACK, size: 20,),
               const SizedBox(width: 4),
               Text(
                 currentLocation,
@@ -225,35 +232,7 @@ static Widget _notifications(BuildContext context) {
   }
 
   static Widget searchBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.GREY_SHADE_100,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search, color: AppColors.GREY),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Text(
-              "What service do you need?",
-              style: TextStyle(color: AppColors.GREY, fontSize: 16),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: AppColors.THEME_COLOR,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: const Icon(Icons.tune, color: AppColors.WHITE, size: 20),
-            ),
-          ),
-        ],
-      ),
-    );
+    return const _AnimatedSearchBar();
   }
 
   /// Listing Card
@@ -347,11 +326,7 @@ static Widget _notifications(BuildContext context) {
 
                 Row(
                   children: [
-                    const Icon(
-                      Icons.star,
-                      color: AppColors.THEME_COLOR,
-                      size: 16,
-                    ),
+                    const Icon(Icons.star, color: AppColors.AMBER, size: 16),
                     Text(
                       '${listing.rating} (${listing.reviews})',
                       style: const TextStyle(fontSize: 12),
@@ -370,12 +345,12 @@ static Widget _notifications(BuildContext context) {
   static Widget shimmerlistingCard() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.WHITE,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Shimmer.fromColors(
-        baseColor: Colors.grey.shade300,
-        highlightColor: Colors.grey.shade100,
+        baseColor: AppColors.GREY_SHADE_300,
+        highlightColor: AppColors.GREY_SHADE_100,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -384,7 +359,7 @@ static Widget _notifications(BuildContext context) {
               height: 100,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: Colors.grey,
+                color: AppColors.GREY,
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(16),
                 ),
@@ -396,13 +371,13 @@ static Widget _notifications(BuildContext context) {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Fake title
-                  Container(height: 12, width: 80, color: Colors.grey),
+                  Container(height: 12, width: 80, color: AppColors.GREY),
                   const SizedBox(height: 8),
                   // Fake subtitle
-                  Container(height: 10, width: 60, color: Colors.grey),
+                  Container(height: 10, width: 60, color: AppColors.GREY),
                   const SizedBox(height: 8),
                   // Fake rating
-                  Container(height: 10, width: 40, color: Colors.grey),
+                  Container(height: 10, width: 40, color: AppColors.GREY),
                 ],
               ),
             ),
@@ -503,13 +478,13 @@ static Widget _notifications(BuildContext context) {
     double radius = 8,
   }) {
     return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
+      baseColor: AppColors.GREY_SHADE_300,
+      highlightColor: AppColors.GREY_SHADE_100,
       child: Container(
         height: height,
         width: width,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.WHITE,
           borderRadius: BorderRadius.circular(radius),
         ),
       ),
@@ -519,13 +494,13 @@ static Widget _notifications(BuildContext context) {
   /// 🔹 Reusable Shimmer Circle
   static Widget shimmerCircle({required double size}) {
     return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
+      baseColor: AppColors.GREY_SHADE_300,
+      highlightColor: AppColors.GREY_SHADE_100,
       child: Container(
         height: size,
         width: size,
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppColors.WHITE,
           shape: BoxShape.circle,
         ),
       ),
@@ -579,7 +554,7 @@ static Widget _notifications(BuildContext context) {
               // Dim background
               Opacity(
                 opacity: 0.5,
-                child: ModalBarrier(color: Colors.black, dismissible: false),
+                child: ModalBarrier(color: AppColors.BLACK, dismissible: false),
               ),
               // Centered circular progress indicator
               Center(
@@ -587,7 +562,7 @@ static Widget _notifications(BuildContext context) {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const CircularProgressIndicator(
-                      color: Colors.white,
+                      color: AppColors.WHITE,
                       strokeWidth: 3,
                     ),
                     if (message != null) ...[
@@ -595,7 +570,7 @@ static Widget _notifications(BuildContext context) {
                       Text(
                         message,
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppColors.WHITE,
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                         ),
@@ -615,5 +590,98 @@ static Widget _notifications(BuildContext context) {
   static void hideLoader() {
     _overlayEntry?.remove();
     _overlayEntry = null;
+  }
+}
+
+class _AnimatedSearchBar extends StatefulWidget {
+  const _AnimatedSearchBar({Key? key}) : super(key: key);
+
+  @override
+  State<_AnimatedSearchBar> createState() => _AnimatedSearchBarState();
+}
+
+class _AnimatedSearchBarState extends State<_AnimatedSearchBar> {
+  final List<String> keywords = [
+    "\"Room Rent\"",
+    "\"Electrician\"",
+    "\"Salons\"",
+    "\"Cafe\"",
+    "\"Gym\"",
+  ];
+
+  int _index = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // rotate every 2 seconds
+    _timer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (!mounted) return;
+      setState(() {
+        _index = (_index + 1) % keywords.length;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.GREY_SHADE_100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search, color: AppColors.GREY),
+          const SizedBox(width: 8),
+
+          // "Search for" fixed + animated keyword
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Text(
+                  "Search for ",
+                  style: TextStyle(
+                    color: AppColors.GREY,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+
+                Text(
+                  keywords[_index],
+                  key: ValueKey<int>(_index),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.GREY,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.THEME_COLOR,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.tune, color: AppColors.WHITE, size: 20),
+          ),
+        ],
+      ),
+    );
   }
 }

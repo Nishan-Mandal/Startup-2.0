@@ -9,7 +9,8 @@ import 'package:startup_20/presentation/screens/add_listing_screen.dart'; // ✅
 
 class ListingPage extends StatefulWidget {
   final String title;
-  const ListingPage({super.key, required this.title});
+  final Query query;
+  const ListingPage({super.key, required this.title, required this.query});
 
   @override
   State<ListingPage> createState() => _ListingPageState();
@@ -20,15 +21,15 @@ class _ListingPageState extends State<ListingPage> {
 
   /// 🔹 Fetch listings from Firestore using the Listing model
   Future<List<Listing>> fetchListings() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection("listings")
-        .where("category", isEqualTo: widget.title)
-        .orderBy("createdAt", descending: true)
-        .get();
+    final snapshot = await widget.query.get();
 
-    listings = snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
+    listings = snapshot.docs
+        .map((doc) => Listing.fromJson(doc.data() as Map<String, dynamic>))
+        .toList();
+
     return listings;
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +175,7 @@ class _ListingPageState extends State<ListingPage> {
               "Be the first to contribute by adding a store or service related to this category!",
               style: TextStyle(
                 fontSize: 15,
-                color: Colors.grey,
+                color: AppColors.GREY,
               ),
               textAlign: TextAlign.center,
             ),
@@ -190,11 +191,11 @@ class _ListingPageState extends State<ListingPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              icon: const Icon(Icons.add, color: Colors.white),
+              icon: const Icon(Icons.add, color: AppColors.WHITE),
               label: const Text(
                 "Contribute Now",
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.WHITE,
                   fontWeight: FontWeight.bold,
                 ),
               ),

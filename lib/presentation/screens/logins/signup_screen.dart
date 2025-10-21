@@ -1,9 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
-import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/bottom_nav_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
@@ -98,7 +97,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final authProvider = Provider.of<AppAuthProvider>(context);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.WHITE,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -157,7 +156,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 const SizedBox(height: 10),
                 const Text(
                   "Sign up and help your neighbors today",
-                  style: TextStyle(fontSize: 16, color: Colors.black54),
+                  style: TextStyle(fontSize: 16, color: AppColors.BLACK_54),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 40),
@@ -168,7 +167,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     labelText: "Name",
                     border: OutlineInputBorder(),
                     hintText: "Enter your name",
-                    hintStyle: TextStyle(color: Colors.black38),
+                    hintStyle: TextStyle(color: AppColors.BLACK_54),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -181,7 +180,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     border: OutlineInputBorder(),
                     prefixText: "+91 ",
                     hintText: "Enter mobile number",
-                    hintStyle: TextStyle(color: Colors.black38),
+                    hintStyle: TextStyle(color: AppColors.BLACK_54),
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -192,7 +191,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   child: ElevatedButton(
                     onPressed: isLoading ? null : _sendOTP,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
+                      backgroundColor: AppColors.THEME_COLOR,
                       elevation: 4,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -205,7 +204,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               height: 24,
                               width: 24,
                               child: CircularProgressIndicator(
-                                color: Colors.white,
+                                color: AppColors.WHITE,
                                 strokeWidth: 2,
                               ),
                             )
@@ -214,7 +213,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: AppColors.WHITE,
                               ),
                             ),
                   ),
@@ -233,7 +232,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       child: const Text(
                         "Sign In",
                         style: TextStyle(
-                          color: Colors.redAccent,
+                          color: AppColors.THEME_COLOR,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

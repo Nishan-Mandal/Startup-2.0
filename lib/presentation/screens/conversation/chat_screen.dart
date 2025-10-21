@@ -5,14 +5,15 @@ import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/conversation_model.dart';
+import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_room_screen.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
+import 'package:startup_20/providers/chat_provider.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String currentUserId; // Pass logged-in userId
-  const ChatScreen({super.key, required this.currentUserId});
+  const ChatScreen({super.key});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -68,30 +69,30 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
             sliver: SliverToBoxAdapter(
               child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection("conversations")
-                    .orderBy("lastMessageAt", descending: true)
-                    .snapshots(),
+                stream:
+                    FirebaseFirestore.instance
+                        .collection("conversations")
+                        .orderBy("lastMessageAt", descending: true)
+                        .snapshots(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  final conversations = snapshot.data!.docs
-                      .map((doc) => Conversation.fromDoc(doc))
-                      .toList();
+                  final conversations =
+                      snapshot.data!.docs
+                          .map((doc) => Conversation.fromDoc(doc))
+                          .toList();
 
                   if (conversations.isEmpty) {
                     return const Center(child: Text("No conversations yet"));
                   }
 
                   // 🔹 Split into groups & direct chats
-                  final groups = conversations
-                      .where((c) => c.type == "group")
-                      .toList();
-                  final people = conversations
-                      .where((c) => c.type == "direct")
-                      .toList();
+                  final groups =
+                      conversations.where((c) => c.type == "group").toList();
+                  final people =
+                      conversations.where((c) => c.type == "direct").toList();
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,13 +108,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                         ...groups.map(
                           (g) => ListTile(
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 0),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 0,
+                            ),
                             leading: CircleAvatar(
-                              radius: 20,
+                              radius: 22,
                               backgroundColor: AppColors.AMBER,
                               child: Text(
-                                g.groupName[0],
+                                CommonMethods.getInitials(g.groupName ?? 'G'),
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
@@ -122,31 +124,62 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                             ),
                             title: Text(
-                              g.groupName,
+                              g.groupName ?? 'Group',
                               style: const TextStyle(
-                                  fontWeight: FontWeight.bold),
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             subtitle: Text(
                               g.lastMessage,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            trailing: Text(
-                              "${g.lastMessageAt.hour}:${g.lastMessageAt.minute.toString().padLeft(2, '0')}",
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.THEME_COLOR,
-                              ),
+                            trailing: StreamBuilder<QuerySnapshot>(
+                              stream:
+                                  FirebaseFirestore.instance
+                                      .collection('conversations')
+                                      .doc(g.conversationId)
+                                      .collection('messages')
+                                      .where('status', isEqualTo: 'sent')
+                                      .where(
+                                        'senderId',
+                                        isNotEqualTo:
+                                            FirebaseAuth
+                                                .instance
+                                                .currentUser!
+                                                .uid,
+                                      )
+                                      .snapshots(),
+                              builder: (context, snapshot) {
+                                final hasUnread =
+                                    snapshot.hasData &&
+                                    snapshot.data!.docs.isNotEmpty;
+                                return Text(
+                                  CommonMethods.formatMessageTime(
+                                    g.lastMessageAt,
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color:
+                                        hasUnread
+                                            ? AppColors.THEME_COLOR
+                                            : AppColors.BLACK_54,
+                                  ),
+                                );
+                              },
                             ),
+
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => ChatRoomScreen(
-                                    conversationId: g.id,
-                                    currentUserId: widget.currentUserId,
-                                    title: g.groupName,
-                                  ),
+                                  builder:
+                                      (_) => ChatRoomScreen(
+                                        conversationId: g.conversationId,
+                                        otherUserId: "",
+                                        type: "group",
+                                        title: g.groupName ?? 'Group',
+                                      ),
                                 ),
                               );
                             },
@@ -164,49 +197,98 @@ class _ChatScreenState extends State<ChatScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        ...people.map(
-                          (p) => ListTile(
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 0),
-                            leading: const CircleAvatar(
+                        ...people.map((p) {
+                          // Get the other participant's name
+                          String otherUserName = "Unknown";
+                          for (var participant in p.participants) {
+                            if (!participant.containsKey(
+                              FirebaseAuth.instance.currentUser!.uid,
+                            )) {
+                              // pick the first participant that is not the current user
+                              otherUserName = participant.values.first;
+                              break;
+                            }
+                          }
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 0,
+                            ),
+                            leading: CircleAvatar(
                               radius: 22,
                               backgroundColor: AppColors.THEME_COLOR,
-                              child: Icon(Icons.person,
-                                  color: AppColors.WHITE, size: 18),
+                              child: Text(
+                                CommonMethods.getInitials(otherUserName ?? 'U'),
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.BLACK,
+                                ),
+                              ),
                             ),
                             title: Text(
-                              p.participants
-                                  .where((id) => id != widget.currentUserId)
-                                  .join(", "),
+                              otherUserName,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.bold),
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             subtitle: Text(
                               p.lastMessage,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            trailing: Text(
-                              "${p.lastMessageAt.hour}:${p.lastMessageAt.minute.toString().padLeft(2, '0')}",
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.BLACK_54,
-                              ),
+                            trailing: StreamBuilder<QuerySnapshot>(
+                              stream:
+                                  FirebaseFirestore.instance
+                                      .collection('conversations')
+                                      .doc(p.conversationId)
+                                      .collection('messages')
+                                      .where('status', isEqualTo: 'sent')
+                                      .where(
+                                        'senderId',
+                                        isNotEqualTo:
+                                            FirebaseAuth
+                                                .instance
+                                                .currentUser!
+                                                .uid,
+                                      )
+                                      .snapshots(),
+                              builder: (context, snapshot) {
+                                final hasUnread =
+                                    snapshot.hasData &&
+                                    snapshot.data!.docs.isNotEmpty;
+                                return Text(
+                                  CommonMethods.formatMessageTime(
+                                    p.lastMessageAt,
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color:
+                                        hasUnread
+                                            ? AppColors.THEME_COLOR
+                                            : AppColors.BLACK_54,
+                                  ),
+                                );
+                              },
                             ),
+
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => ChatRoomScreen(
-                                    conversationId: p.id,
-                                    currentUserId: widget.currentUserId,
-                                    title: "Chat",
-                                  ),
+                                  builder:
+                                      (_) => ChatRoomScreen(
+                                        conversationId: p.conversationId,
+                                        otherUserId:
+                                            "", // optional, you can pass the userId if needed
+                                        type: "direct",
+                                        title:
+                                            otherUserName, // directly pass the name
+                                      ),
                                 ),
                               );
                             },
-                          ),
-                        ),
+                          );
+                        }),
                       ],
                     ],
                   );

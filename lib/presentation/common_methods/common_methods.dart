@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
+import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 
 class CommonMethods {
   static void navigateToListingDetailScreen(
@@ -42,4 +44,32 @@ class CommonMethods {
     }
   }
 
+  static String getInitials(String fullName) {
+    if (fullName.isEmpty) return 'U'; // Default initial
+    final parts = fullName.trim().split(RegExp(r'\s+')); // Split by spaces
+    final firstChar = parts[0].isNotEmpty ? parts[0][0] : '';
+    final secondChar =
+        parts.length > 1 && parts[1].isNotEmpty ? parts[1][0] : '';
+    return (firstChar + secondChar).toUpperCase();
+  }
+
+  static String formatMessageTime(DateTime? time) {
+    if (time == null) return '';
+    final now = DateTime.now();
+    final difference = now.difference(time).inDays;
+    if (difference == 0) {
+      return DateFormat('hh:mm a').format(time); // today
+    } else if (difference == 1) {
+      return 'Yesterday, ${DateFormat('hh:mm a').format(time)}';
+    } else {
+      return DateFormat('MMM d, hh:mm a').format(time);
+    }
+  }
+
+  static navigateToSignInScreen(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => SignInScreen()),
+    );
+  }
 }

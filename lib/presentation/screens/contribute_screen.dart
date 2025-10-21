@@ -1,5 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/data/models/user_model.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
 
 class ContributionScreen extends StatefulWidget {
@@ -10,10 +13,67 @@ class ContributionScreen extends StatefulWidget {
 }
 
 class _ContributionScreenState extends State<ContributionScreen> {
+  AppUser? currentUser;
+  bool isLoading = true;
+
+  /// 🔹 Leaderboard state
+  List<Map<String, dynamic>> topContributors = [];
+  bool leaderboardLoading = true;
+
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
+    _loadUser();
+    _fetchTopContributors();
+  }
+
+  Future<void> _loadUser() async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId != null) {
+        final doc = FirebaseFirestore.instance.collection('users').doc(userId);
+        final user = await doc.get();
+        if (user.exists) {
+          setState(() {
+            currentUser = AppUser.fromMap(user.data()!, user.id);
+            isLoading = false;
+          });
+        } else {
+          setState(() => isLoading = false);
+        }
+      } else {
+        setState(() => isLoading = false);
+      }
+    } catch (e) {
+      debugPrint("Error fetching user: $e");
+      setState(() => isLoading = false);
+    }
+  }
+
+  /// 🔹 Fetch top contributors for the current week
+  Future<void> _fetchTopContributors() async {
+    try {
+      // You can add filters using .where('from', isLessThanOrEqualTo: DateTime.now()) etc.
+      final snapshot =
+          await FirebaseFirestore.instance
+              .collection('top-contributors')
+              .orderBy('kudos', descending: true)
+              .limit(3)
+              .get();
+
+      final data = snapshot.docs.map((doc) => doc.data()).toList();
+
+      if (mounted) {
+        setState(() {
+          topContributors = data;
+          leaderboardLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("❌ Error fetching top contributors: $e");
+      if (mounted) setState(() => leaderboardLoading = false);
+    }
   }
 
   @override
@@ -30,11 +90,11 @@ class _ContributionScreenState extends State<ContributionScreen> {
         ),
         actions: [
           Row(
-            children: const [
+            children: [
               Icon(Icons.handshake, color: AppColors.AMBER),
               SizedBox(width: 4),
               Text(
-                "100",
+                currentUser == null ? '0' : '${currentUser?.kudos}',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               SizedBox(width: 12),
@@ -58,7 +118,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
-                    children: const [
+                    children: [
                       Icon(Icons.handshake, color: AppColors.AMBER, size: 32),
                       SizedBox(width: 12),
                       Column(
@@ -73,7 +133,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            "100",
+                            currentUser == null ? '0' : '${currentUser?.kudos}',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
@@ -120,9 +180,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => AddListingScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => AddListingScreen()),
                     );
                   },
                 ),
@@ -131,19 +189,21 @@ class _ContributionScreenState extends State<ContributionScreen> {
                   title: "Refer a friend",
                   subtitle: "Invite & earn extra Kudos",
                   reward: "150",
+                  comingSoon: true,
                 ),
                 _contributionCard(
                   icon: Icons.card_giftcard,
                   title: "Redeem Kudos",
                   subtitle: "Exchange for rewards",
                   reward: null,
+                  comingSoon: true,
                 ),
               ],
             ),
 
             const SizedBox(height: 20),
 
-            // Leaderboard
+            // ✅ Leaderboard Section
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -159,27 +219,38 @@ class _ContributionScreenState extends State<ContributionScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  _leaderboardItem(
-                    medal: "🥇",
-                    name: "Rahul Kumar",
-                    kudos: 520,
-                  ),
-                  _leaderboardItem(
-                    medal: "🥈",
-                    name: "Kartik Thakur",
-                    kudos: 452,
-                  ),
-                  _leaderboardItem(
-                    medal: "🥉",
-                    name: "Nishan Mandal",
-                    kudos: 390,
-                  ),
+                  if (leaderboardLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (topContributors.isEmpty)
+                    const Text("No contributors this week 😅")
+                  else
+                    Column(
+                      children: List.generate(topContributors.length, (index) {
+                        final contributor = topContributors[index];
+                        final medals = ["🥇", "🥈", "🥉"];
+                        return _leaderboardItem(
+                          medal: medals[index],
+                          name: contributor['name'] ?? 'Unknown',
+                          kudos: contributor['kudos'] ?? 0,
+                        );
+                      }),
+                    ),
 
-                  const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.center,
                     child: TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              "✨ That’s all for now! Check back soon for more top contributors.",
+                            ),
+                            duration: Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: AppColors.BLACK_54,
+                          ),
+                        );
+                      },
                       child: const Text("See all"),
                     ),
                   ),
@@ -198,6 +269,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
     required String subtitle,
     String? reward,
     VoidCallback? onTap,
+    bool comingSoon = false,
   }) {
     return InkWell(
       onTap: onTap,
@@ -226,7 +298,10 @@ class _ContributionScreenState extends State<ContributionScreen> {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: AppColors.BLACK_54, fontSize: 12),
+                  style: const TextStyle(
+                    color: AppColors.BLACK_54,
+                    fontSize: 12,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -247,6 +322,30 @@ class _ContributionScreenState extends State<ContributionScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+
+          if (comingSoon)
+            Positioned(
+              left: 0,
+              top: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: const BoxDecoration(
+                  color: AppColors.AMBER,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    bottomRight: Radius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Coming Soon",
+                  style: TextStyle(
+                    color: AppColors.WHITE,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
         ],

@@ -1,8 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/data/models/user_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
+import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
 
@@ -14,11 +17,66 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  bool isLoading = true;
+  AppUser? currentUser;
+  List<String>? favIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  /// 🔹 Fetch current user data from Firestore
+  Future<void> _loadUser() async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId != null) {
+        final doc = FirebaseFirestore.instance.collection('users').doc(userId);
+
+        final user = await doc.get();
+
+        final favSnapshot = await doc.collection("favorites").get();
+
+        if (user.exists) {
+          setState(() {
+            currentUser = AppUser.fromMap(user.data()!, user.id);
+            favIds = favSnapshot.docs.map((doc) => doc.id).toList();
+            isLoading = false;
+          });
+        } else {
+          setState(() => isLoading = false);
+        }
+      } else {
+        setState(() => isLoading = false);
+      }
+    } catch (e) {
+      print("Error fetching user: $e");
+      setState(() => isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AppAuthProvider>(context);
+
+    if (isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text("Profile"),
+          centerTitle: true,
+          backgroundColor: AppColors.THEME_COLOR,
+        ),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (currentUser == null) {
+      return const Scaffold(body: Center(child: Text("User data not found")));
+    }
+
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: AppColors.GREY_SHADE_100,
       appBar: AppBar(
         title: const Text("Profile"),
         centerTitle: true,
@@ -27,31 +85,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            /// 🔹 User Info Section
+            // 🧍 User Info Section
             Container(
               padding: const EdgeInsets.all(16),
-              color: Colors.white,
+              color: AppColors.WHITE,
               child: Row(
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 30,
-                    backgroundImage: NetworkImage(
-                      "https://i.pravatar.cc/150?img=12",
-                    ),
+                    child: Text(CommonMethods.getInitials(currentUser!.name)),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Nishan Mandal",
-                          style: TextStyle(
+                        Text(
+                          currentUser!.name,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const Text("Haldia, West Bengal"),
+                        Text(currentUser!.phone ?? ""),
                         const SizedBox(height: 8),
                       ],
                     ),
@@ -62,12 +118,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 12),
 
-            /// 🔹 Kudos Wallet
+            // 💰 Kudos Wallet
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.WHITE,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -79,9 +135,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   Row(
                     children: [
-                      const Icon(Icons.handshake, color: Colors.amber),
+                      const Icon(Icons.handshake, color: AppColors.AMBER),
                       const SizedBox(width: 6),
-                      const Text("250"),
+                      Text("${currentUser!.kudos ?? 0}"),
                       const SizedBox(width: 12),
                       ElevatedButton(
                         onPressed: () {},
@@ -103,32 +159,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             /// 🔹 My Activity Section
             _buildSection("My Activity", [
-              _buildTile(Icons.store, "My Listings", () {}),
+              _buildTile(Icons.store, "My Listings", () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => ListingPage(
+                          title: "My Listings",
+                          query: FirebaseFirestore.instance
+                              .collection("listings")
+                              .where("addedBy", isEqualTo: currentUser!.userId)
+                              .orderBy("createdAt", descending: true),
+                        ),
+                  ),
+                );
+              }),
               _buildTile(Icons.group_add, "My Referrals", () {}),
-              _buildTile(Icons.chat, "My Chats", () {}),
-              _buildTile(Icons.favorite, "Saved Services", () {}),
+              _buildTile(Icons.favorite, "Saved Services", () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => ListingPage(
+                          title: "Saved Services",
+                          query: FirebaseFirestore.instance
+                              .collection("listings")
+                              .where(FieldPath.documentId, whereIn: favIds),
+                        ),
+                  ),
+                );
+              }),
             ]),
 
             /// 🔹 Rewards Section
-            _buildSection("Rewards & Kudos", [
+            _buildSection("Rewards & Kudos (coming soon)", [
               _buildTile(Icons.wallet_giftcard, "Kudos Wallet", () {}),
               _buildTile(Icons.history, "Redeem History", () {}),
             ]),
 
             /// 🔹 Settings Section
             _buildSection("Settings", [
-              _buildTile(Icons.notifications, "Notifications", () {}),
               _buildTile(Icons.lock, "Privacy & Security", () {}),
               _buildTile(Icons.language, "Language & Region", () {}),
               _buildTile(Icons.help, "Help & Support", () {}),
               _buildTile(Icons.info, "About Us", () {}),
             ]),
 
-            const SizedBox(height: 20),
-
-            /// 🔹 Logout Button
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: ElevatedButton(
                 onPressed: () {
                   authProvider.signOut();
@@ -147,7 +225,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: const Text("Logout"),
               ),
             ),
-            const SizedBox(height: 40),
           ],
         ),
       ),

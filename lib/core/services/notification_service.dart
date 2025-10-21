@@ -3,19 +3,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'package:startup_20/main.dart';
-import 'package:startup_20/providers/auth_provider.dart';
 
 class NotificationService {
-  static final _firebaseMessaging = FirebaseMessaging.instance;
+  static final firebaseMessaging = FirebaseMessaging.instance;
   static final _localNotifications = FlutterLocalNotificationsPlugin();
 
   /// Initialize Firebase Messaging + Local Notifications
   static Future<void> initialize() async {
     // 🔹 Request permission (for iOS and macOS)
-    await _firebaseMessaging.requestPermission(
+    await firebaseMessaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -58,14 +55,15 @@ class NotificationService {
     });
 
     // 🔹 When opened from terminated state
-    final initialMessage = await _firebaseMessaging.getInitialMessage();
+    final initialMessage = await firebaseMessaging.getInitialMessage();
     if (initialMessage != null) {
       _handleNavigation(initialMessage.data);
       await _saveNotificationToFirestore(initialMessage);
     }
 
     // Optional: print FCM token for testing
-    final token = await _firebaseMessaging.getToken();
+    final token = await firebaseMessaging.getToken();
+
     debugPrint("📱 FCM Token: $token");
   }
 
@@ -96,21 +94,24 @@ class NotificationService {
   }
 
   /// Save user-specific notification to Firestore
-  static Future<void> _saveNotificationToFirestore(RemoteMessage message) async {
+  static Future<void> _saveNotificationToFirestore(
+    RemoteMessage message,
+  ) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
 
-      if (user == null || user.isAnonymous) {
+      if (user == null || user.isAnonymous || message.data['type'] == 'chat') {
         debugPrint('⚠️ Skipped saving notification: No authenticated user');
         return;
       }
 
       final userId = user.uid;
-      final docRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('notifications')
-          .doc();
+      final docRef =
+          FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('notifications')
+              .doc();
 
       final notificationData = {
         'notificationId': docRef.id,

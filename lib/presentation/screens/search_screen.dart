@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
@@ -303,6 +302,16 @@ class _SearchScreenState extends State<SearchScreen> {
                                         builder:
                                             (context) => ListingPage(
                                               title: category.name,
+                                              query: FirebaseFirestore.instance
+                                                  .collection("listings")
+                                                  .where(
+                                                    "category",
+                                                    isEqualTo: category.name,
+                                                  )
+                                                  .orderBy(
+                                                    "createdAt",
+                                                    descending: true,
+                                                  ),
                                             ),
                                       ),
                                     );

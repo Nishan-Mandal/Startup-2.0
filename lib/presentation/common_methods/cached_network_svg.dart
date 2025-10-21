@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:startup_20/core/constants/app_colors.dart';
 
 class CachedNetworkSvg extends StatefulWidget {
   final String url;
@@ -44,7 +45,7 @@ class _CachedNetworkSvgState extends State<CachedNetworkSvg> {
               const Center(child: CircularProgressIndicator(strokeWidth: 1.5));
         } else if (snapshot.hasError || !snapshot.hasData) {
           return widget.errorWidget ??
-              const Icon(Icons.error, color: Colors.red);
+              const Icon(Icons.error, color: AppColors.RED);
         } else {
           return SvgPicture.file(
             snapshot.data!,

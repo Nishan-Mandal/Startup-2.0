@@ -6,15 +6,20 @@ class AppAuthProvider with ChangeNotifier {
 
   User? _user;
   User? get user => _user;
-
-  bool get isLoggedIn => _user != null;
-  bool get isAnonymous => _user?.phoneNumber == null;
-
+  
   AppAuthProvider() {
     _auth.authStateChanges().listen((User? user) {
       _user = user;
       notifyListeners();
     });
+  }
+
+  static bool isAnonymousUser() {
+    final user =  FirebaseAuth.instance.currentUser;
+    if(user == null || user.phoneNumber == null || user.phoneNumber!.isEmpty){
+      return true;
+    }
+    return false;
   }
 
   Future<void> signOut() async {

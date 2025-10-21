@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:provider/provider.dart';
+import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/core/services/notification_service.dart';
 import 'package:startup_20/presentation/screens/bottom_nav_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 
@@ -68,24 +70,32 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   Future<void> _saveUserData(String name, String phone) async {
+    // final _firebaseMessaging = FirebaseMessaging.instance;
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final doc = FirebaseFirestore.instance.collection('users').doc(user.uid);
       final snapshot = await doc.get();
 
+      final token = await NotificationService.firebaseMessaging.getToken();
+
       // If user doesn't exist in Firestore → create new
       if (!snapshot.exists) {
         await doc.set({
           "userId": user.uid,
+          "fcmToken": token,
           "name": name,
           "phone": phone,
           "role": "customer",
           "createdAt": FieldValue.serverTimestamp(),
           "updatedAt": FieldValue.serverTimestamp(),
         });
+        await user.updateDisplayName(name);
       } else {
         // 🔄 Existing user → just update updatedAt
-        await doc.update({"updatedAt": FieldValue.serverTimestamp()});
+        await doc.update({
+          "updatedAt": FieldValue.serverTimestamp(),
+          "fcmToken": token,
+        });
       }
     }
   }
@@ -93,7 +103,7 @@ class _OtpScreenState extends State<OtpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.WHITE,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -113,7 +123,7 @@ class _OtpScreenState extends State<OtpScreen> {
               const SizedBox(height: 8),
               Text(
                 "Enter OTP sent to +91${widget.phoneNumber}",
-                style: const TextStyle(fontSize: 16, color: Colors.black54),
+                style: const TextStyle(fontSize: 16, color: AppColors.BLACK_54),
                 textAlign: TextAlign.center,
               ),
 
@@ -134,12 +144,12 @@ class _OtpScreenState extends State<OtpScreen> {
                   borderRadius: BorderRadius.circular(12),
                   fieldHeight: 50,
                   fieldWidth: 50,
-                  activeFillColor: Colors.white,
-                  inactiveFillColor: Colors.white,
-                  selectedFillColor: Colors.white,
-                  activeColor: Colors.redAccent,
-                  selectedColor: Colors.redAccent,
-                  inactiveColor: Colors.grey.shade400,
+                  activeFillColor: AppColors.WHITE,
+                  inactiveFillColor: AppColors.WHITE,
+                  selectedFillColor: AppColors.WHITE,
+                  activeColor: AppColors.RED,
+                  selectedColor: AppColors.RED,
+                  inactiveColor: AppColors.GREY_SHADE_300,
                 ),
                 animationDuration: const Duration(milliseconds: 300),
                 enableActiveFill: true,
@@ -158,7 +168,7 @@ class _OtpScreenState extends State<OtpScreen> {
                           ? null
                           : () => _verifyOTP(otpController.text.trim()),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
+                    backgroundColor: AppColors.RED,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -170,13 +180,13 @@ class _OtpScreenState extends State<OtpScreen> {
                             height: 24,
                             width: 24,
                             child: CircularProgressIndicator(
-                              color: Colors.white,
+                              color: AppColors.WHITE,
                               strokeWidth: 2,
                             ),
                           )
                           : const Text(
                             "Verify OTP",
-                            style: TextStyle(fontSize: 18, color: Colors.white),
+                            style: TextStyle(fontSize: 18, color: AppColors.WHITE),
                           ),
                 ),
               ),
@@ -190,7 +200,7 @@ class _OtpScreenState extends State<OtpScreen> {
                 },
                 child: const Text(
                   "Resend OTP",
-                  style: TextStyle(color: Colors.redAccent, fontSize: 16),
+                  style: TextStyle(color: AppColors.RED, fontSize: 16),
                 ),
               ),
             ],

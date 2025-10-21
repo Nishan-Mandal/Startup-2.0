@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
@@ -11,7 +10,6 @@ import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 class CategoryScreen extends StatefulWidget {
   const CategoryScreen({super.key});
@@ -164,7 +162,14 @@ class _CategoryScreenState extends State<CategoryScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ListingPage(title: category.name),
+                    builder:
+                        (context) => ListingPage(
+                          title: category.name,
+                          query: FirebaseFirestore.instance
+                              .collection("listings")
+                              .where("category", isEqualTo: category.name)
+                              .orderBy("createdAt", descending: true),
+                        ),
                   ),
                 );
               },

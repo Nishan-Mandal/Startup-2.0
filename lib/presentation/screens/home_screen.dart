@@ -334,7 +334,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             .toList(),
                       ),
                       const SizedBox(height: 20),
-                      _bannerData(homeData.banners[index+1]),
+                      _bannerData(homeData.banners[index + 1]),
                     ],
                   ]),
                 ),
@@ -369,14 +369,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Container(
                     width: double.infinity,
                     height: 180,
-                    color: Colors.white,
+                    color: AppColors.WHITE
                   ),
                 );
               },
               errorWidget:
                   (context, url, error) => Container(
-                    color: Colors.grey.shade300,
-                    child: const Icon(Icons.image, color: Colors.grey),
+                    color: AppColors.GREY_SHADE_300,
+                    child: const Icon(Icons.image, color: AppColors.GREY),
                   ),
             ),
           );
@@ -439,7 +439,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ListingPage(title: heading),
+                    builder:
+                        (context) => ListingPage(
+                          title: heading,
+                          query: FirebaseFirestore.instance
+                              .collection("listings")
+                              .where("category", isEqualTo: heading)
+                              .orderBy("createdAt", descending: true),
+                        ),
                   ),
                 );
               }
@@ -472,7 +479,14 @@ class _HomeScreenState extends State<HomeScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => ListingPage(title: category.category),
+                builder:
+                    (context) => ListingPage(
+                      title: category.category,
+                      query: FirebaseFirestore.instance
+                          .collection("listings")
+                          .where("category", isEqualTo: category.category)
+                          .orderBy("createdAt", descending: true),
+                    ),
               ),
             );
           },
@@ -496,37 +510,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: double.infinity,
                     height: double.infinity,
                     // show your shimmer while loading
-                    placeholder:
-                         Shimmer.fromColors(
-                          baseColor: AppColors.GREY_SHADE_300,
-                          highlightColor: AppColors.GREY_SHADE_100,
-                          child: Container(color: AppColors.GREY_SHADE_300),
-                        ),
+                    placeholder: Shimmer.fromColors(
+                      baseColor: AppColors.GREY_SHADE_300,
+                      highlightColor: AppColors.GREY_SHADE_100,
+                      child: Container(color: AppColors.GREY_SHADE_300),
+                    ),
                     errorWidget: const Icon(Icons.broken_image),
                   ),
-                  // CachedNetworkImage(
-                  //   imageUrl:
-                  //       category.imageUrl, // 🔹 replace with your image URL
-                  //   fit: BoxFit.cover,
-
-                  //   placeholder: (context, url) {
-                  //     return Shimmer.fromColors(
-                  //       baseColor: AppColors.GREY_SHADE_300,
-                  //       highlightColor: AppColors.GREY_SHADE_100,
-                  //       child: Container(
-                  //         width: 60,
-                  //         height: 60,
-                  //         color: Colors.white,
-                  //       ),
-                  //     );
-                  //   },
-                  //   errorWidget:
-                  //       (context, url, error) => const Icon(
-                  //         Icons.broken_image,
-                  //         color: Colors.grey,
-                  //         size: 28,
-                  //       ),
-                  // ),
                 ),
               ),
               const SizedBox(height: 6),
@@ -604,20 +594,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       placeholder: (context, url) {
                         return Shimmer.fromColors(
-                          baseColor: Colors.grey.shade300,
-                          highlightColor: Colors.grey.shade100,
+                          baseColor: AppColors.GREY_SHADE_300,
+                          highlightColor: AppColors.GREY_SHADE_100,
                           child: Container(
                             width: double.infinity,
                             height: double.infinity,
-                            color: Colors.white,
+                            color: AppColors.WHITE,
                           ),
                         );
                       },
 
                       errorWidget:
                           (context, url, error) => Container(
-                            color: Colors.grey.shade300,
-                            child: const Icon(Icons.image, color: Colors.grey),
+                            color: AppColors.GREY_SHADE_300,
+                            child: const Icon(Icons.image, color: AppColors.GREY),
                           ),
                       width: 140,
                       height: 180,
@@ -645,7 +635,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: const Text(
                               "Featured",
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.WHITE,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -766,20 +756,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
           placeholder: (context, url) {
             return Shimmer.fromColors(
-              baseColor: Colors.grey.shade300,
-              highlightColor: Colors.grey.shade100,
+              baseColor: AppColors.GREY_SHADE_300,
+              highlightColor: AppColors.GREY_SHADE_100,
               child: Container(
                 width: double.infinity,
                 height: double.infinity,
-                color: Colors.white,
+                color: AppColors.WHITE,
               ),
             );
           },
 
           errorWidget:
               (context, url, error) => Container(
-                color: Colors.grey.shade300,
-                child: const Icon(Icons.image, color: Colors.grey),
+                color: AppColors.GREY_SHADE_300,
+                child: const Icon(Icons.image, color: AppColors.GREY),
               ),
         ),
       ),

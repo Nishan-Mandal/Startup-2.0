@@ -7,7 +7,8 @@ class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
   /// Stream user-specific notifications
-  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _getUserNotifications() {
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+  _getUserNotifications() {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null || user.isAnonymous) {
@@ -25,7 +26,9 @@ class NotificationsScreen extends StatelessWidget {
   }
 
   /// Marks a user-specific notification as read
-  Future<void> _markAsRead(QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
+  Future<void> _markAsRead(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -51,14 +54,22 @@ class NotificationsScreen extends StatelessWidget {
       case '/listingDetail':
         final listingId = data['listingId'];
         if (listingId != null) {
-          Navigator.pushNamed(context, route, arguments: {'listingId': listingId});
+          Navigator.pushNamed(
+            context,
+            route,
+            arguments: {'listingId': listingId},
+          );
         }
         break;
 
       case '/chatRoom':
         final conversationId = data['conversationId'];
         if (conversationId != null) {
-          Navigator.pushNamed(context, route, arguments: {'conversationId': conversationId});
+          Navigator.pushNamed(
+            context,
+            route,
+            arguments: {'conversationId': conversationId},
+          );
         }
         break;
 
@@ -76,6 +87,7 @@ class NotificationsScreen extends StatelessWidget {
           "Notifications",
           style: TextStyle(color: AppColors.WHITE),
         ),
+        iconTheme: const IconThemeData(color: AppColors.WHITE),
         centerTitle: true,
         backgroundColor: AppColors.THEME_COLOR,
         actions: [
@@ -110,9 +122,10 @@ class NotificationsScreen extends StatelessWidget {
               final isRead = notif["isRead"] ?? false;
 
               final createdAt = (notif["createdAt"] as Timestamp?)?.toDate();
-              final formattedTime = createdAt != null
-                  ? TimeOfDay.fromDateTime(createdAt).format(context)
-                  : "";
+              final formattedTime =
+                  createdAt != null
+                      ? TimeOfDay.fromDateTime(createdAt).format(context)
+                      : "";
 
               IconData iconData;
               switch (type) {
@@ -134,13 +147,13 @@ class NotificationsScreen extends StatelessWidget {
 
               return GestureDetector(
                 onTap: () async {
-                  await _markAsRead(doc);
                   _handleNavigation(context, notif);
+                  await _markAsRead(doc);
                 },
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 6),
                   decoration: BoxDecoration(
-                    color: isRead ? Colors.grey[200] : Colors.white,
+                    color: isRead ? AppColors.GREY_SHADE_300 : AppColors.WHITE,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       if (!isRead)

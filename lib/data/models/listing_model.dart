@@ -12,7 +12,7 @@ class Listing {
   final List<String> tags;
   final String addedBy;
   final bool isClaimed;
-  final String? ownerId;
+  final String ownerId;
   final String claimStatus;
   final String? verifiedBy;
   final DateTime createdAt;
@@ -33,7 +33,7 @@ class Listing {
     required this.tags,
     required this.addedBy,
     required this.isClaimed,
-    this.ownerId,
+    required this.ownerId,
     required this.claimStatus,
     this.verifiedBy,
     required this.createdAt,

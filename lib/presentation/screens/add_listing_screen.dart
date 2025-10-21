@@ -11,7 +11,6 @@ import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:startup_20/data/models/category_model.dart';
 import 'package:startup_20/data/models/category_model.dart' as models;
 import 'package:geocoding/geocoding.dart';
 
@@ -263,7 +262,7 @@ Future<void> _submitContribution() async {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Please fill in all required fields."),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: AppColors.RED,
         ),
       );
       return;
@@ -301,7 +300,7 @@ Future<void> _submitContribution() async {
       tags: [_selectedCategory!],
       addedBy: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
       isClaimed: false,
-      ownerId: null,
+      ownerId: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
       claimStatus: "pending",
       verifiedBy: null,
       createdAt: DateTime.now(),
@@ -331,7 +330,7 @@ Future<void> _submitContribution() async {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("✅ Contribution submitted for review!"),
-          backgroundColor: Colors.green,
+          backgroundColor: AppColors.GREEN,
         ),
       );
       Navigator.pop(context);
@@ -611,7 +610,7 @@ Future<void> _submitContribution() async {
           // 🔹 Loading overlay
           if (_isLoading)
             Container(
-              color: Colors.black54,
+              color: AppColors.BLACK_54,
               child: const Center(
                 child: CircularProgressIndicator(color: AppColors.THEME_COLOR),
               ),
