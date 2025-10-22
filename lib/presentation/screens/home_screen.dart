@@ -691,7 +691,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               const Icon(
                                 Icons.star,
-                                color: AppColors.THEME_COLOR,
+                                color: AppColors.AMBER,
                                 size: 16,
                               ),
                               Text(

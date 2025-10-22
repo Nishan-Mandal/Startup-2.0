@@ -213,7 +213,11 @@ class CommonWidgets {
               ],
           child: Row(
             children: [
-              const Icon(Icons.location_on_outlined, color: AppColors.BLACK, size: 20,),
+              const Icon(
+                Icons.location_on_outlined,
+                color: AppColors.BLACK,
+                size: 20,
+              ),
               const SizedBox(width: 4),
               Text(
                 currentLocation,
@@ -285,6 +289,8 @@ class CommonWidgets {
               children: [
                 Text(
                   listing.category,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12, color: AppColors.GREY),
                 ),
                 const SizedBox(height: 4),
@@ -300,6 +306,7 @@ class CommonWidgets {
 
                 const SizedBox(height: 4),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     const Icon(
                       Icons.location_on,
@@ -323,10 +330,10 @@ class CommonWidgets {
                   ],
                 ),
                 const SizedBox(height: 4),
-
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    const Icon(Icons.star, color: AppColors.AMBER, size: 16),
+                    const Icon(Icons.star, color: AppColors.AMBER, size: 14),
                     Text(
                       '${listing.rating} (${listing.reviews})',
                       style: const TextStyle(fontSize: 12),

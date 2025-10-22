@@ -537,7 +537,7 @@ Future<void> _submitContribution() async {
                                 .map(
                                   (cat) => DropdownMenuItem(
                                     value:
-                                        cat.name, // store category name as value
+                                        cat.name,
                                     child: Row(
                                       children: [
                                         SizedBox(

@@ -69,7 +69,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   Future<void> _toggleFavorite() async {
-    if(AppAuthProvider.isAnonymousUser()){
+    if (AppAuthProvider.isAnonymousUser()) {
       CommonMethods.navigateToSignInScreen(context);
       return;
     }
@@ -138,35 +138,70 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       );
       return;
     }
-    String text = _reviewController.text;
+
+    final text = _reviewController.text.trim();
     _reviewController.clear();
 
-    final reviewsRef =
-        FirebaseFirestore.instance
-            .collection("listings")
-            .doc(widget.listing.listingId)
-            .collection("reviews")
-            .doc();
+    final firestore = FirebaseFirestore.instance;
+    final listingRef = firestore
+        .collection("listings")
+        .doc(widget.listing.listingId);
+    final reviewRef = listingRef.collection("reviews").doc();
 
     final review = Review(
-      reviewId: reviewsRef.id,
+      reviewId: reviewRef.id,
       userId: FirebaseAuth.instance.currentUser!.uid,
-      userName: "John Doe", // Replace with logged-in userName
+      userName: FirebaseAuth.instance.currentUser!.displayName??"Anonymous",
       rating: _selectedRating,
       comment: text,
       createdAt: DateTime.now(),
     );
 
-    await reviewsRef.set(review.toJson());
+    try {
+      await firestore.runTransaction((transaction) async {
+        // 🔹 1. Get current listing data
+        final listingSnapshot = await transaction.get(listingRef);
 
-    setState(() => _selectedRating = 0);
+        if (!listingSnapshot.exists) {
+          throw Exception("Listing not found");
+        }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Review submitted successfully"),
-        backgroundColor: AppColors.GREEN,
-      ),
-    );
+        final currentData = listingSnapshot.data()!;
+        final currentRating = (currentData['rating'] ?? 0).toDouble();
+        final currentReviews = (currentData['reviews'] ?? 0) as int;
+
+        // 🔹 2. Calculate new average rating
+        final totalRating = (currentRating * currentReviews) + _selectedRating;
+        final newReviewCount = currentReviews + 1;
+        final newAverageRating = totalRating / newReviewCount;
+
+        // 🔹 3. Add new review
+        transaction.set(reviewRef, review.toJson());
+
+        // 🔹 4. Update listing rating & review count
+        transaction.update(listingRef, {
+          'rating': double.parse(
+            newAverageRating.toStringAsFixed(1),
+          ), // round to 1 decimal
+          'reviews': newReviewCount,
+          'updatedAt': DateTime.now(),
+        });
+      });
+
+      setState(() => _selectedRating = 0);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Review submitted successfully"),
+          backgroundColor: AppColors.GREEN,
+        ),
+      );
+    } catch (e) {
+      debugPrint("❌ Error submitting review: $e");
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error submitting review: $e")));
+    }
   }
 
   void _launchCaller(String phoneNumber) async {
@@ -642,7 +677,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final listing = widget.listing;
-    
 
     return Scaffold(
       backgroundColor: AppColors.WHITE,
@@ -735,7 +769,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   void _handleChat() async {
-    if(AppAuthProvider.isAnonymousUser()){
+    if (AppAuthProvider.isAnonymousUser()) {
       CommonMethods.navigateToSignInScreen(context);
       return;
     }
