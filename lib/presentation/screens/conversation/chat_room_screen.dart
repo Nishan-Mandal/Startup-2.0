@@ -32,7 +32,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final ScrollController _scrollController = ScrollController();
   bool unreadSeparatorShown = false;
 
-
   @override
   void dispose() {
     // TODO: implement dispose
@@ -173,10 +172,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
+
                 final messages =
                     snapshot.data!.docs
                         .map((doc) => ChatMessage.fromDoc(doc))
                         .toList();
+
+                // Scroll to the bottom after new messages load
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (_scrollController.hasClients) {
+                    _scrollController.jumpTo(
+                      _scrollController.position.maxScrollExtent+70,
+                    );
+                  }
+                });
 
                 return ListView.builder(
                   controller: _scrollController,
@@ -191,9 +200,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       unreadSeparatorShown = true;
                       return Column(
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.all(15.0),
-                            child: const Text(
+                          const Padding(
+                            padding: EdgeInsets.all(15.0),
+                            child: Text(
                               "Unread messages",
                               style: TextStyle(
                                 color: AppColors.GREY,
@@ -202,7 +211,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                               ),
                             ),
                           ),
-
                           _buildMessageBubble(m, isMe),
                         ],
                       );

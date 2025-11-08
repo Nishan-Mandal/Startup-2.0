@@ -4,8 +4,10 @@ import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
+import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/search_screen.dart';
-import 'package:startup_20/presentation/screens/add_listing_screen.dart'; // ✅ Import your AddListingScreen
+import 'package:startup_20/presentation/screens/add_listing_screen.dart';
+import 'package:startup_20/providers/auth_provider.dart'; // ✅ Import your AddListingScreen
 
 class ListingPage extends StatefulWidget {
   final String title;
@@ -23,13 +25,13 @@ class _ListingPageState extends State<ListingPage> {
   Future<List<Listing>> fetchListings() async {
     final snapshot = await widget.query.get();
 
-    listings = snapshot.docs
-        .map((doc) => Listing.fromJson(doc.data() as Map<String, dynamic>))
-        .toList();
+    listings =
+        snapshot.docs
+            .map((doc) => Listing.fromJson(doc.data() as Map<String, dynamic>))
+            .toList();
 
     return listings;
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -101,8 +103,8 @@ class _ListingPageState extends State<ListingPage> {
                 mainAxisSpacing: 12,
                 childAspectRatio: 3 / 3.5,
               ),
-              itemBuilder: (context, index) =>
-                  CommonWidgets.shimmerlistingCard(),
+              itemBuilder:
+                  (context, index) => CommonWidgets.shimmerlistingCard(),
             );
           }
 
@@ -163,20 +165,14 @@ class _ListingPageState extends State<ListingPage> {
 
             Text(
               "No listings found in '${widget.title}'",
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
 
             const Text(
               "Be the first to contribute by adding a store or service related to this category!",
-              style: TextStyle(
-                fontSize: 15,
-                color: AppColors.GREY,
-              ),
+              style: TextStyle(fontSize: 15, color: AppColors.GREY),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -185,8 +181,10 @@ class _ListingPageState extends State<ListingPage> {
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.THEME_COLOR,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -203,8 +201,11 @@ class _ListingPageState extends State<ListingPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => AddListingScreen(
-                    ),
+                    builder:
+                        (context) =>
+                            AppAuthProvider.isAnonymousUser()
+                                ? SignInScreen(skip: false,)
+                                : AddListingScreen(),
                   ),
                 );
               },

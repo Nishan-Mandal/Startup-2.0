@@ -32,6 +32,8 @@ class Category {
     );
   }
 
+  get category => null;
+
   // 🔹 Convert Dart Model -> Firestore JSON
   Map<String, dynamic> toJson() {
     return {

@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/core/services/notification_service.dart';
+import 'package:startup_20/data/models/category_model.dart';
 import 'package:startup_20/data/models/home_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/main.dart';
@@ -32,6 +33,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<HomeModel> _homeFuture;
   late Future<List<Listing>> _featuredListings;
+  late Future<List<Listing>> _newAddedListings;
   late Future<List<Listing>> _recommendedListings;
   List<Listing> listings = [];
 
@@ -44,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _handleScroll();
     _homeFuture = fetchHomeData();
     _featuredListings = fetchFeaturedListings();
+    _newAddedListings = fetchNewListings();
     _recommendedListings = fetchRecommendedListings();
   }
 
@@ -68,22 +71,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<List<Listing>> fetchFeaturedListings() async {
+    Future<List<Listing>> featuredListings = fetchListingsByTag("featured");
+    return featuredListings;
+  }
+
+  Future<List<Listing>> fetchNewListings() async {
     final snapshot =
         await FirebaseFirestore.instance
             .collection("listings")
-            .where("tags", arrayContains: "featured")
-            .orderBy("createdAt", descending: true) // optional, latest first
+            .orderBy("createdAt", descending: true)
+            .limit(8)
             .get();
 
     return snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
   }
 
   Future<List<Listing>> fetchRecommendedListings() async {
+    Future<List<Listing>> recommendedListings = fetchListingsByTag(
+      "recommended",
+    );
+    return recommendedListings;
+  }
+
+  Future<List<Listing>> fetchListingsByTag(String tag) async {
     final snapshot =
         await FirebaseFirestore.instance
             .collection("listings")
-            .where("tags", arrayContains: "recommended")
-            .orderBy("createdAt", descending: true) // optional, latest first
+            .where("tags", arrayContains: tag)
+            .orderBy("createdAt", descending: true)
+            .limit(8)
             .get();
 
     return snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
@@ -122,72 +138,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return HomeModel.fromJson(doc.data());
-  }
-
-  /// Sample Data Generator
-  Future<void> generateSampleListings() async {
-    final firestore = FirebaseFirestore.instance;
-    final random = Random();
-    // 🔹 Define 10 categories
-    final categories = [
-      "Restaurant",
-      "Electrician",
-      "Plumber",
-      "Grocery",
-      "Doctor",
-      "Salon",
-      "Gym",
-      "Pharmacy",
-      "Cafe",
-      "Mechanic",
-    ];
-
-    // 🔹 For each category, create 10 sample listings
-    for (final category in categories) {
-      for (int i = 1; i <= 10; i++) {
-        final docRef = firestore.collection("listings").doc();
-
-        final data = {
-          "listingId": docRef.id,
-          "contributionId": "contrib_${category}_$i",
-          "name": "$category Service $i",
-          "address": "123 Main Street, City $i",
-          "description": "Best $category service in town #$i",
-          "geo": {"lat": 37.7749 + (i * 0.001), "lng": -122.4194 + (i * 0.001)},
-          "phone": "+91 98765432$i",
-          "category": category,
-          "tags": ["$category", "Service", "Demo"],
-          "addedBy": "system_admin",
-          "isClaimed": false,
-          "ownerId": null,
-          "claimStatus": "unclaimed",
-          "verifiedBy": null,
-          "createdAt": FieldValue.serverTimestamp(),
-          "updatedAt": FieldValue.serverTimestamp(),
-          "reviews": random.nextInt(500),
-          "rating": double.parse(
-            (1 + random.nextDouble() * 4).toStringAsFixed(
-              1,
-            ), // ensures 1.0 → 5.0 with 1 decimal
-          ),
-          "images": [
-            {
-              "fileId": "file_${category}_$i-1",
-              "fullUrl": "https://picsum.photos/200",
-              "thumbUrl": "https://picsum.photos/200",
-            },
-            {
-              "fileId": "file_${category}_$i-2",
-              "fullUrl": "https://picsum.photos/200",
-              "thumbUrl": "https://picsum.photos/200",
-            },
-          ],
-        };
-
-        // 🔹 Write to Firestore
-        await docRef.set(data);
-      }
-    }
   }
 
   @override
@@ -271,6 +221,44 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    _headings('Newly Added'),
+                    const SizedBox(height: 20),
+                    FutureBuilder<List<Listing>>(
+                      future: _newAddedListings,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: 6,
+                            padding: const EdgeInsets.symmetric(horizontal: 15),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 3 / 3.9,
+                                ),
+                            itemBuilder:
+                                (context, index) =>
+                                    CommonWidgets.shimmerlistingCard(),
+                          );
+                        }
+                        if (snapshot.hasError) {
+                          return Text("Error: ${snapshot.error}");
+                        }
+
+                        final listings = snapshot.data ?? [];
+
+                        if (listings.isEmpty) {
+                          return const Text("No New listings available");
+                        }
+
+                        return _listingsData(listings);
+                      },
+                    ),
+                    const SizedBox(height: 20),
                     _headings('Recommended'),
                     const SizedBox(height: 20),
                     FutureBuilder<List<Listing>>(
@@ -299,19 +287,19 @@ class _HomeScreenState extends State<HomeScreen> {
                           return Text("Error: ${snapshot.error}");
                         }
 
-                        final featuredListings = snapshot.data ?? [];
+                        final listings = snapshot.data ?? [];
 
-                        if (featuredListings.isEmpty) {
+                        if (listings.isEmpty) {
                           return const Text(
                             "No recommended listings available",
                           );
                         }
 
-                        return _listingsData(featuredListings);
+                        return _listingsData(listings);
                       },
                     ),
                     const SizedBox(height: 20),
-                    _bannerData(homeData.banners[0]),
+                    _bannerData(homeData.banners[0].imageUrl),
 
                     for (
                       int index = 0;
@@ -334,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             .toList(),
                       ),
                       const SizedBox(height: 20),
-                      _bannerData(homeData.banners[index + 1]),
+                      _bannerData(homeData.banners[index + 1].imageUrl),
                     ],
                   ]),
                 ),
@@ -349,35 +337,54 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _promoBanner(List<dynamic> promoBanners) {
+  Widget _promoBanner(List<BannerModel> promoBanners) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: CarouselSlider.builder(
         itemCount: promoBanners.length,
         itemBuilder: (context, index, realIndex) {
-          final imageUrl = promoBanners[index];
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: CachedNetworkImage(
-              imageUrl: imageUrl,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              placeholder: (context, url) {
-                return Shimmer.fromColors(
-                  baseColor: AppColors.GREY_SHADE_300,
-                  highlightColor: AppColors.GREY_SHADE_100,
-                  child: Container(
-                    width: double.infinity,
-                    height: 180,
-                    color: AppColors.WHITE
-                  ),
-                );
-              },
-              errorWidget:
-                  (context, url, error) => Container(
-                    color: AppColors.GREY_SHADE_300,
-                    child: const Icon(Icons.image, color: AppColors.GREY),
-                  ),
+          final imageUrl = promoBanners[index].imageUrl;
+          return GestureDetector(
+            onTap: () {
+              final route = promoBanners[index].route ?? '';
+              if (route.isNotEmpty) {
+                // Check if the route is a listing detail route
+                if (route.startsWith('/listingDetail/')) {
+                  final listingId = route.split('/').last; // extract '001'
+                  Navigator.pushNamed(
+                    context,
+                    '/listingDetail',
+                    arguments: {'listingId': listingId},
+                  );
+                } else {
+                  // Navigate to any other route directly
+                  Navigator.pushNamed(context, route);
+                }
+              }
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                placeholder: (context, url) {
+                  return Shimmer.fromColors(
+                    baseColor: AppColors.GREY_SHADE_300,
+                    highlightColor: AppColors.GREY_SHADE_100,
+                    child: Container(
+                      width: double.infinity,
+                      height: 180,
+                      color: AppColors.WHITE,
+                    ),
+                  );
+                },
+                errorWidget:
+                    (context, url, error) => Container(
+                      color: AppColors.GREY_SHADE_300,
+                      child: const Icon(Icons.image, color: AppColors.GREY),
+                    ),
+              ),
             ),
           );
         },
@@ -435,6 +442,33 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   listen: false,
                 ).setIndex(1);
+              } else if (heading == 'Newly Added') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => ListingPage(
+                          title: heading,
+                          query: FirebaseFirestore.instance
+                              .collection("listings")
+                              .orderBy("createdAt", descending: true),
+                        ),
+                  ),
+                );
+              } else if (heading == 'Recommended') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => ListingPage(
+                          title: heading,
+                          query: FirebaseFirestore.instance
+                              .collection("listings")
+                              .where("tags", arrayContains: "recommended")
+                              .orderBy("createdAt", descending: true),
+                        ),
+                  ),
+                );
               } else {
                 Navigator.push(
                   context,
@@ -607,7 +641,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       errorWidget:
                           (context, url, error) => Container(
                             color: AppColors.GREY_SHADE_300,
-                            child: const Icon(Icons.image, color: AppColors.GREY),
+                            child: const Icon(
+                              Icons.image,
+                              color: AppColors.GREY,
+                            ),
                           ),
                       width: 140,
                       height: 180,
@@ -670,7 +707,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 size: 14,
                                 color: AppColors.GREY,
                               ),
-                              const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   listing.address,
@@ -779,6 +815,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class SearchBarHeader extends SliverPersistentHeaderDelegate {
   final Widget child;
+
   SearchBarHeader({required this.child});
 
   @override
@@ -787,14 +824,35 @@ class SearchBarHeader extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
+    // 🔹 Determine how far the header has shrunk (0 → fully visible, 1 → pinned)
+    final t = (shrinkOffset / maxExtent).clamp(0.0, 1.0);
+
+    // 🔹 Interpolate between two gradients
+    final Color base = AppColors.THEME_COLOR;
+
+    final Color startColor =
+        Color.lerp(
+          base.withValues(alpha: 0.5), // instead of withOpacity(0.7)
+          base,
+          t,
+        )!;
+
+    final Color endColor =
+        Color.lerp(
+          base.withValues(alpha: 0.2),
+          base.withValues(alpha: 0.8),
+          t,
+        )!;
+
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.WHITE, // keeps background same
+        gradient: LinearGradient(
+          colors: [startColor, endColor],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
         border: Border(
-          bottom: BorderSide(
-            color: AppColors.GREY_SHADE_300, // line color
-            width: 1.0, // line thickness
-          ),
+          bottom: BorderSide(color: Colors.grey.shade300, width: 1.0),
         ),
       ),
       padding: const EdgeInsets.only(left: 10, right: 10, top: 5, bottom: 20),
@@ -802,7 +860,7 @@ class SearchBarHeader extends SliverPersistentHeaderDelegate {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => SearchScreen()),
+            MaterialPageRoute(builder: (context) => const SearchScreen()),
           );
         },
         child: child,
@@ -811,11 +869,11 @@ class SearchBarHeader extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  double get maxExtent => 80; // fixed height
+  double get maxExtent => 80;
   @override
-  double get minExtent => 80; // fixed height
+  double get minExtent => 80;
 
   @override
   bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) =>
-      false;
+      true;
 }

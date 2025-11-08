@@ -19,15 +19,22 @@ class CommonWidgets {
       child: Container(
         padding: const EdgeInsets.only(top: 20),
         decoration: BoxDecoration(
-          color: AppColors.WHITE,
-          // gradient: LinearGradient(
-          //   begin: Alignment.topCenter,
-          //   end: Alignment.bottomCenter,
-          //   colors: [AppColors.THEME_COLOR, AppColors.WHITE, AppColors.WHITE, AppColors.WHITE, AppColors.WHITE],
-          // ),
+          // color: AppColors.THEME_COLOR,
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.THEME_COLOR.withValues(alpha: 1.0),
+              AppColors.THEME_COLOR.withValues(alpha: 0.9),
+              AppColors.THEME_COLOR.withValues(alpha: 0.8),
+              AppColors.THEME_COLOR.withValues(alpha: 0.7),
+              AppColors.THEME_COLOR.withValues(alpha: 0.6),
+              AppColors.THEME_COLOR.withValues(alpha: 0.5),
+            ],
+          ),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 15),
+          padding: const EdgeInsets.symmetric(horizontal: 15, ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -38,12 +45,18 @@ class CommonWidgets {
                   const Text(
                     "EasyFind",
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 23,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.THEME_COLOR,
+                      color: AppColors.WHITE,
                     ),
                   ),
-                  Row(children: [_notifications(context), _profile(context)]),
+                  Row(
+                    children: [
+                      _notifications(context),
+                      SizedBox(width: 10),
+                      _profile(context),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 30),
@@ -73,8 +86,8 @@ class CommonWidgets {
           );
         },
         child: Container(
-          height: 30,
-          width: 30,
+          height: 33,
+          width: 33,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: AppColors.GREY_SHADE_100,
@@ -83,7 +96,7 @@ class CommonWidgets {
           child: const Icon(
             Icons.notifications_outlined,
             size: 20,
-            color: AppColors.BLACK,
+            color: AppColors.THEME_COLOR,
           ),
         ),
       );
@@ -116,8 +129,8 @@ class CommonWidgets {
             clipBehavior: Clip.none,
             children: [
               Container(
-                height: 30,
-                width: 30,
+                height: 33,
+                width: 33,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: AppColors.GREY_SHADE_100,
@@ -126,7 +139,7 @@ class CommonWidgets {
                 child: const Icon(
                   Icons.notifications_outlined,
                   size: 20,
-                  color: AppColors.BLACK,
+                  color: AppColors.THEME_COLOR,
                 ),
               ),
 
@@ -166,20 +179,24 @@ class CommonWidgets {
 
   /// 🔹 Profile Button
   static Widget _profile(BuildContext context) {
-    return IconButton(
-      onPressed: () {
+    return GestureDetector(
+      onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder:
                 (context) =>
                     AppAuthProvider.isAnonymousUser()
-                        ? SignInScreen()
+                        ? SignInScreen(skip: false,)
                         : const ProfileScreen(),
           ),
         );
       },
-      icon: const Icon(Icons.person_outline, color: AppColors.BLACK),
+      child: const CircleAvatar(
+        radius: 18,
+        backgroundColor: AppColors.WHITE,
+        child: Icon(Icons.person_outline, color: AppColors.BLACK, size: 22),
+      ),
     );
   }
 
@@ -215,7 +232,7 @@ class CommonWidgets {
             children: [
               const Icon(
                 Icons.location_on_outlined,
-                color: AppColors.BLACK,
+                color: AppColors.BLACK_54,
                 size: 20,
               ),
               const SizedBox(width: 4),
@@ -224,10 +241,10 @@ class CommonWidgets {
                 style: const TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
-                  color: AppColors.BLACK,
+                  color: AppColors.BLACK_54,
                 ),
               ),
-              const Icon(Icons.arrow_drop_down, color: AppColors.BLACK),
+              const Icon(Icons.arrow_drop_down, color: AppColors.BLACK_54),
             ],
           ),
         );
@@ -334,6 +351,7 @@ class CommonWidgets {
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     const Icon(Icons.star, color: AppColors.AMBER, size: 14),
+                    SizedBox(width: 5),
                     Text(
                       '${listing.rating} (${listing.reviews})',
                       style: const TextStyle(fontSize: 12),

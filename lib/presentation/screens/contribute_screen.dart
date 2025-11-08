@@ -81,12 +81,12 @@ class _ContributionScreenState extends State<ContributionScreen> {
     return Scaffold(
       backgroundColor: AppColors.WHITE,
       appBar: AppBar(
-        backgroundColor: AppColors.WHITE,
+        backgroundColor: AppColors.THEME_COLOR,
         elevation: 0,
         centerTitle: false,
         title: const Text(
           "Your Contribution",
-          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.BLACK),
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.WHITE),
         ),
         actions: [
           Row(
@@ -95,7 +95,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
               SizedBox(width: 4),
               Text(
                 currentUser == null ? '0' : '${currentUser?.kudos}',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.WHITE),
               ),
               SizedBox(width: 12),
             ],

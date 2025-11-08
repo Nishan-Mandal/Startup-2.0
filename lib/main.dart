@@ -2,11 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/core/services/notification_service.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_screen.dart';
+import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/notification_screen.dart';
@@ -29,8 +31,9 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AppAuthProvider()),
         ChangeNotifierProvider(create: (_) => BottomNavProvider()),
-        ChangeNotifierProvider(create: (_) => ChatProvider())
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
       ],
+
       child: const MyApp(),
     ),
   );
@@ -51,7 +54,7 @@ class MyApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       routes: {
         '/notifications': (context) => const NotificationsScreen(),
-        '/chatScreen': (context) => const ChatScreen(),
+        '/chatScreen': (context) => const BottomNavScreen(initialIndex: 3,),
       },
 
       onGenerateRoute: (settings) {
@@ -99,10 +102,15 @@ class MyApp extends StatelessWidget {
         }
 
         // fallback
-        return MaterialPageRoute(builder: (_) => const SignInScreen());
+        return MaterialPageRoute(
+          builder: (_) => AppAuthProvider.isAnonymousUser()?SignInScreen(skip: false):HomeScreen(),
+        );
       },
 
-      home: authProvider.user == null ? const OnboardingScreen() : const BottomNavScreen(),
+      home:
+          authProvider.user == null
+              ? const OnboardingScreen()
+              : const BottomNavScreen(),
     );
   }
 }

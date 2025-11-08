@@ -5,10 +5,13 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
+import 'package:startup_20/presentation/common_methods/common_methods.dart';
+import 'package:startup_20/presentation/common_methods/location_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:startup_20/data/models/category_model.dart' as models;
@@ -24,10 +27,13 @@ class _AddListingScreenState extends State<AddListingScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _ownerNameController = TextEditingController();
+
   late double _latitude;
   late double _longitude;
   late Future<List<models.Category>> _categoriesFuture;
-  String? _selectedCategory;
+  String? _selectedCategoryId;
+  String? _selectedCategoryName;
   bool _isLoading = false;
 
   final List<File> _images = [];
@@ -166,191 +172,113 @@ class _AddListingScreenState extends State<AddListingScreen> {
     return uploaded;
   }
 
-  /// Get current location and update address
-  Future<void> _getCurrentLocation() async {
+  /// Submit contribution
+  Future<void> _submitContribution() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Location permission denied")),
-          );
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
+      // ✅ Validate mandatory fields
+      if (_addressController.text.trim().isEmpty ||
+          _nameController.text.trim().isEmpty ||
+          _phoneController.text.trim().isEmpty ||
+          _ownerNameController.text.trim().isEmpty ||
+          _selectedCategoryName == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Location permissions are permanently denied"),
+            content: Text("Please fill in all required fields."),
+            backgroundColor: AppColors.RED,
           ),
         );
         return;
       }
 
-      // Get current position
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+      final firestore = FirebaseFirestore.instance;
+
+      final listingDocRef = firestore.collection("listings").doc();
+      final contributionDocRef = firestore.collection("contributions").doc();
+
+      // ✅ Upload images
+      final imageList = await _uploadImages(listingDocRef.id);
+
+      // Convert uploaded image maps → ImageFile models
+      final images =
+          imageList
+              .map<ImageFile>(
+                (img) => ImageFile(
+                  fileId: img['fileId'],
+                  fullUrl: img['fullUrl'],
+                  thumbUrl: img['thumbUrl'],
+                ),
+              )
+              .toList();
+
+      // ✅ Create the Listing model object
+      final listing = Listing(
+        listingId: listingDocRef.id,
+        contributionId: contributionDocRef.id,
+        name: _nameController.text.trim(),
+        address: _addressController.text.trim(),
+        description: _descriptionController.text.trim(),
+        geo: Geo(lat: _latitude ?? 0.0, lng: _longitude ?? 0.0),
+        phone: _phoneController.text.trim(),
+        category: _selectedCategoryName!,
+        categoryId: _selectedCategoryId!,
+        tags: [_selectedCategoryName!],
+        addedBy: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
+        isClaimed: false,
+        ownerId: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
+        ownerName: _ownerNameController.text.trim(),
+        claimStatus: "pending",
+        verifiedBy: null,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        images: images,
+        reviews: 0,
+        rating: 0,
       );
 
-      await _getAddressFromLatLng(position);
+      // ✅ Create Contribution data
+      final contributionData = {
+        "contributionId": contributionDocRef.id,
+        "userId": FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
+        "listingId": listingDocRef.id,
+        "type": "add",
+        "status": "pending",
+        "reviewedBy": null,
+        "createdAt": FieldValue.serverTimestamp(),
+        "updatedAt": FieldValue.serverTimestamp(),
+      };
 
-      debugPrint(
-        "📍 Current Location: ${position.latitude}, ${position.longitude}",
-      );
-    } catch (e) {
-      _isLoading = false;
-      debugPrint("Error getting location: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error getting location: $e")));
-    }
-  }
+      // ✅ Save both documents
+      await listingDocRef.set(listing.toJson());
+      await contributionDocRef.set(contributionData);
 
-  /// Convert lat/lng to address
-  Future<void> _getAddressFromLatLng(Position position) async {
-    try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks.first;
-
-        String address =
-            "${place.street}, ${place.locality}, ${place.administrativeArea}";
-
-        setState(() {
-          _addressController.text = address;
-          _latitude = position.latitude.toDouble();
-          _longitude = position.longitude.toDouble();
-          _isLoading = false;
-        });
-      } else {
-        debugPrint("⚠️ No address found");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Contribution submitted for review!"),
+            backgroundColor: AppColors.GREEN,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e, st) {
+      debugPrint("❌ Error while submitting contribution: $e\n$st");
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text("No address found")));
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
       }
-    } catch (e) {
-      _isLoading = false;
-      debugPrint("❌ Error reverse geocoding: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error getting address")));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
-
-  /// Submit contribution
-Future<void> _submitContribution() async {
-  setState(() {
-    _isLoading = true;
-  });
-
-  try {
-    // ✅ Validate mandatory fields
-    if (_addressController.text.trim().isEmpty ||
-        _nameController.text.trim().isEmpty ||
-        _phoneController.text.trim().isEmpty ||
-        _selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please fill in all required fields."),
-          backgroundColor: AppColors.RED,
-        ),
-      );
-      return;
-    }
-
-    final firestore = FirebaseFirestore.instance;
-
-    final listingDocRef = firestore.collection("listings").doc();
-    final contributionDocRef = firestore.collection("contributions").doc();
-
-    // ✅ Upload images
-    final imageList = await _uploadImages(listingDocRef.id);
-
-    // Convert uploaded image maps → ImageFile models
-    final images = imageList
-        .map<ImageFile>(
-          (img) => ImageFile(
-            fileId: img['fileId'],
-            fullUrl: img['fullUrl'],
-            thumbUrl: img['thumbUrl'],
-          ),
-        )
-        .toList();
-
-    // ✅ Create the Listing model object
-    final listing = Listing(
-      listingId: listingDocRef.id,
-      contributionId: contributionDocRef.id,
-      name: _nameController.text.trim(),
-      address: _addressController.text.trim(),
-      description: _descriptionController.text.trim(),
-      geo: Geo(lat: _latitude ?? 0.0, lng: _longitude ?? 0.0),
-      phone: _phoneController.text.trim(),
-      category: _selectedCategory!,
-      tags: [_selectedCategory!],
-      addedBy: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
-      isClaimed: false,
-      ownerId: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
-      claimStatus: "pending",
-      verifiedBy: null,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      images: images,
-      reviews: 0,
-      rating: 0,
-    );
-
-    // ✅ Create Contribution data
-    final contributionData = {
-      "contributionId": contributionDocRef.id,
-      "userId": FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
-      "listingId": listingDocRef.id,
-      "type": "add",
-      "status": "pending",
-      "reviewedBy": null,
-      "createdAt": FieldValue.serverTimestamp(),
-      "updatedAt": FieldValue.serverTimestamp(),
-    };
-
-    // ✅ Save both documents
-    await listingDocRef.set(listing.toJson());
-    await contributionDocRef.set(contributionData);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("✅ Contribution submitted for review!"),
-          backgroundColor: AppColors.GREEN,
-        ),
-      );
-      Navigator.pop(context);
-    }
-  } catch (e, st) {
-    debugPrint("❌ Error while submitting contribution: $e\n$st");
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    }
-  } finally {
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -480,8 +408,30 @@ Future<void> _submitContribution() async {
                                   ? AppColors.BLACK_54
                                   : Colors.blue,
                         ),
-                        onPressed: () {
-                          _getCurrentLocation();
+                        onPressed: () async {
+                          // _getCurrentLocation();
+                          final selectedLatLng = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const LocationPicker(),
+                            ),
+                          );
+
+                          if (selectedLatLng != null) {
+                            debugPrint(
+                              "📍 Selected Location: ${selectedLatLng.latitude}, ${selectedLatLng.longitude}",
+                            );
+                            _addressController.text =
+                                await CommonMethods.getAddressFromLatLng(
+                                  selectedLatLng,
+                                );
+
+                            // Example: Update your text field with selected address or coordinates
+                            setState(() {
+                              _latitude = selectedLatLng.latitude;
+                              _longitude = selectedLatLng.longitude;
+                            });
+                          }
                         },
                       ),
                     ],
@@ -493,6 +443,16 @@ Future<void> _submitContribution() async {
                     controller: _nameController,
                     decoration: const InputDecoration(
                       labelText: "*Shop/Service Name",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  //Owner's Name
+                  TextFormField(
+                    controller: _ownerNameController,
+                    decoration: const InputDecoration(
+                      labelText: "*Owner's Name",
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -528,46 +488,12 @@ Future<void> _submitContribution() async {
 
                       final categories = snapshot.data!;
 
-                      return DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        value: _selectedCategory,
-                        alignment: Alignment.center,
-                        items:
-                            categories
-                                .map(
-                                  (cat) => DropdownMenuItem(
-                                    value:
-                                        cat.name,
-                                    child: Row(
-                                      children: [
-                                        SizedBox(
-                                          width: 30,
-                                          height: 30,
-                                          child: CachedNetworkSvg(
-                                            url: cat.imageUrl,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            cat.name,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-
-                                    // Text(cat.name),
-                                  ),
-                                )
-                                .toList(),
-                        decoration: const InputDecoration(
-                          labelText: "*Category",
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (value) {
+                      return SearchableDropdown(
+                        categories: categories,
+                        onCategorySelected: (String id, String name) {
                           setState(() {
-                            _selectedCategory = value;
+                            _selectedCategoryId = id;
+                            _selectedCategoryName = name;
                           });
                         },
                       );
@@ -581,7 +507,7 @@ Future<void> _submitContribution() async {
                     controller: _descriptionController,
                     maxLines: 3,
                     decoration: const InputDecoration(
-                      labelText: "Description",
+                      labelText: "Description (Optional)",
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -616,6 +542,142 @@ Future<void> _submitContribution() async {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class SearchableDropdown extends StatefulWidget {
+  final List<models.Category> categories;
+  final Function(String, String) onCategorySelected;
+
+  const SearchableDropdown({
+    super.key,
+    required this.categories,
+    required this.onCategorySelected,
+  });
+
+  @override
+  State<SearchableDropdown> createState() => _SearchableDropdownState();
+}
+
+class _SearchableDropdownState extends State<SearchableDropdown> {
+  String? _selectedCategoryName;
+  String? _selectedCategoryId;
+  final TextEditingController _searchController = TextEditingController();
+
+  void _openSearchDialog() async {
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) {
+        List<models.Category> filtered = widget.categories;
+
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text("Select Category"),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        hintText: "Search category...",
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (query) {
+                        setStateDialog(() {
+                          filtered =
+                              widget.categories
+                                  .where(
+                                    (cat) => cat.name.toLowerCase().contains(
+                                      query.toLowerCase(),
+                                    ),
+                                  )
+                                  .toList();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.4,
+                      width: double.maxFinite,
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          models.Category cat = filtered[index];
+                          return ListTile(
+                            leading: SizedBox(
+                              width: 30,
+                              height: 30,
+                              child: SvgPicture.network(
+                                cat.imageUrl,
+                                height: 10,
+                                width: 10,
+                              ),
+                            ),
+                            title: Text(cat.name),
+                            onTap: () {
+                              Navigator.pop(context, {
+                                'id': cat.id ?? '',
+                                'name': cat.name,
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedCategoryId = result['id'];
+        _selectedCategoryName = result['name'];
+      });
+      widget.onCategorySelected(_selectedCategoryId ?? '', _selectedCategoryName ?? '');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _openSearchDialog,
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: "*Category",
+          border: OutlineInputBorder(),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _selectedCategoryName ?? "Select Category",
+                style: TextStyle(
+                  color:
+                      _selectedCategoryName == null
+                          ? Colors.grey
+                          : Colors.black,
+                ),
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
       ),
     );
   }

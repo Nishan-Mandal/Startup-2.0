@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -29,16 +30,16 @@ class ListingDetailScreen extends StatefulWidget {
 class _ListingDetailScreenState extends State<ListingDetailScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  late Future<String?> ownerName;
   double _selectedRating = 0;
   bool _isChatLoading = false;
+  bool _isSendingRewiew = false;
+
   bool _isFavorite = false;
   final TextEditingController _reviewController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    ownerName = CommonMethods.getUserName(widget.listing.ownerId);
     _checkIfFavorite();
   }
 
@@ -95,6 +96,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           'listingId': widget.listing.listingId,
           'name': widget.listing.name,
           'image': widget.listing.images.first.fullUrl,
+          'createdAt': FieldValue.serverTimestamp(),
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -132,6 +134,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   Future<void> _submitReview() async {
+    if (_isSendingRewiew) return; // Prevent multiple taps
+
     if (_selectedRating == 0 || _reviewController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please give a rating and review")),
@@ -139,27 +143,44 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       return;
     }
 
-    final text = _reviewController.text.trim();
-    _reviewController.clear();
-
-    final firestore = FirebaseFirestore.instance;
-    final listingRef = firestore
-        .collection("listings")
-        .doc(widget.listing.listingId);
-    final reviewRef = listingRef.collection("reviews").doc();
-
-    final review = Review(
-      reviewId: reviewRef.id,
-      userId: FirebaseAuth.instance.currentUser!.uid,
-      userName: FirebaseAuth.instance.currentUser!.displayName??"Anonymous",
-      rating: _selectedRating,
-      comment: text,
-      createdAt: DateTime.now(),
-    );
+    setState(() => _isSendingRewiew = true);
 
     try {
+      final firestore = FirebaseFirestore.instance;
+      final listingRef = firestore
+          .collection("listings")
+          .doc(widget.listing.listingId);
+      final reviewQuery =
+          await listingRef
+              .collection("reviews")
+              .where(
+                "userId",
+                isEqualTo: FirebaseAuth.instance.currentUser!.uid,
+              )
+              .get();
+
+      if (reviewQuery.docs.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("You have already submitted a review")),
+        );
+        setState(() => _isSendingRewiew = false);
+        return;
+      }
+
+      final text = _reviewController.text.trim();
+      _reviewController.clear();
+
+      final reviewRef = listingRef.collection("reviews").doc();
+      final review = Review(
+        reviewId: reviewRef.id,
+        userId: FirebaseAuth.instance.currentUser!.uid,
+        userName: FirebaseAuth.instance.currentUser?.displayName ?? "Anonymous",
+        rating: _selectedRating,
+        comment: text,
+        createdAt: DateTime.now(),
+      );
+
       await firestore.runTransaction((transaction) async {
-        // 🔹 1. Get current listing data
         final listingSnapshot = await transaction.get(listingRef);
 
         if (!listingSnapshot.exists) {
@@ -170,25 +191,22 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         final currentRating = (currentData['rating'] ?? 0).toDouble();
         final currentReviews = (currentData['reviews'] ?? 0) as int;
 
-        // 🔹 2. Calculate new average rating
         final totalRating = (currentRating * currentReviews) + _selectedRating;
         final newReviewCount = currentReviews + 1;
         final newAverageRating = totalRating / newReviewCount;
 
-        // 🔹 3. Add new review
         transaction.set(reviewRef, review.toJson());
-
-        // 🔹 4. Update listing rating & review count
         transaction.update(listingRef, {
-          'rating': double.parse(
-            newAverageRating.toStringAsFixed(1),
-          ), // round to 1 decimal
+          'rating': double.parse(newAverageRating.toStringAsFixed(1)),
           'reviews': newReviewCount,
           'updatedAt': DateTime.now(),
         });
       });
 
-      setState(() => _selectedRating = 0);
+      setState(() {
+        _selectedRating = 0;
+        _isSendingRewiew = false;
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -198,6 +216,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       );
     } catch (e) {
       debugPrint("❌ Error submitting review: $e");
+      setState(() => _isSendingRewiew = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Error submitting review: $e")));
@@ -233,7 +252,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   // ---------- Widgets ----------
   Widget _buildImageCarousel(Listing listing) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 40),
+      padding: const EdgeInsets.symmetric(horizontal: 40),
       height: 220,
       width: double.infinity,
       color: AppColors.GREY_SHADE_300,
@@ -245,10 +264,32 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             itemCount: listing.images.length,
             onPageChanged: (index) => setState(() => _currentPage = index),
             itemBuilder: (context, index) {
-              return Image.network(
-                listing.images[index].fullUrl,
-                fit: BoxFit.cover,
-                width: double.infinity,
+              final imageUrl = listing.images[index].fullUrl;
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (_) => _FullScreenImageView(
+                            images:
+                                listing.images.map((e) => e.fullUrl).toList(),
+                            initialIndex: index,
+                          ),
+                    ),
+                  );
+                },
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  placeholder:
+                      (context, url) =>
+                          const Center(child: CircularProgressIndicator()),
+                  errorWidget:
+                      (context, url, error) =>
+                          const Icon(Icons.broken_image, color: Colors.grey),
+                ),
               );
             },
           ),
@@ -314,7 +355,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                listing.name,
+                listing.name.length > 25
+                    ? '${listing.name.substring(0, 25)}...'
+                    : listing.name,
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -329,7 +372,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    listing.address,
+                    listing.address.length > 30
+                        ? '${listing.address.substring(0, 30)}...'
+                        : listing.address,
                     style: const TextStyle(color: AppColors.GREY),
                   ),
                 ],
@@ -369,34 +414,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FutureBuilder<String?>(
-                future: ownerName,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    );
-                  } else if (snapshot.hasError) {
-                    return const Text("Error");
-                  } else if (!snapshot.hasData || snapshot.data == null) {
-                    return const Text("Unknown");
-                  } else {
-                    return Text(
-                      snapshot.data!,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    );
-                  }
-                },
+              Text(
+                listing.ownerName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
-              const Text(
-                "Contributor",
-                style: TextStyle(color: AppColors.GREY),
-              ),
+              Text("Contributor", style: TextStyle(color: AppColors.GREY)),
             ],
           ),
           const Spacer(),
@@ -407,16 +432,35 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               )
               : TextButton.icon(
                 onPressed: () {
-                  _handleChat();
+                  if (listing.isClaimed) {
+                    _handleChat();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          "Sorry, the chat service is currently unavailable for this seller.",
+                        ),
+                      ),
+                    );
+                  }
                 },
-                icon: const Icon(
+                icon: Icon(
                   Icons.chat_bubble,
-                  color: AppColors.THEME_COLOR,
+                  color:
+                      !listing.isClaimed
+                          ? AppColors.GREY
+                          : AppColors.THEME_COLOR,
                   size: 20,
                 ),
                 label: Text(
                   "Chat",
-                  style: TextStyle(color: AppColors.THEME_COLOR, fontSize: 17),
+                  style: TextStyle(
+                    color:
+                        !listing.isClaimed
+                            ? AppColors.GREY
+                            : AppColors.THEME_COLOR,
+                    fontSize: 17,
+                  ),
                 ),
               ),
         ],
@@ -454,11 +498,23 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           decoration: InputDecoration(
             hintText: "Write a review...",
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.send),
-              color: AppColors.THEME_COLOR,
-              onPressed: _submitReview,
-            ),
+            suffixIcon:
+                _isSendingRewiew
+                    ? Transform.scale(
+                      scale: 0.5, // 0.5 = 50% of original size
+                      child: const CircularProgressIndicator(
+                        color: AppColors.THEME_COLOR,
+                      ),
+                    )
+                    : IconButton(
+                      icon: const Icon(Icons.send),
+                      color: AppColors.THEME_COLOR,
+                      onPressed: () {
+                        AppAuthProvider.isAnonymousUser()
+                            ? CommonMethods.navigateToSignInScreen(context)
+                            : _submitReview();
+                      },
+                    ),
           ),
         ),
       ],
@@ -504,31 +560,36 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 backgroundColor: AppColors.GREY_SHADE_300,
                 child: Icon(Icons.person, color: AppColors.BLACK),
               ),
-              title: Row(
+              title: Text(
+                r.userName,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis, // Truncate long names
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [const SizedBox(height: 4), Text(r.comment)],
+              ),
+              trailing: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: Text(
-                      r.userName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis, // Truncate long names
-                    ),
-                  ),
-                  const SizedBox(width: 6),
+                  // ⭐ Rating stars above date
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: List.generate(5, (i) {
                       return Icon(
                         i < r.rating ? Icons.star : Icons.star_border,
-                        size: 16,
+                        size: 18,
                         color: AppColors.AMBER,
                       );
                     }),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "${r.createdAt.day}/${r.createdAt.month}/${r.createdAt.year}",
+                    style: const TextStyle(color: AppColors.GREY, fontSize: 12),
+                  ),
                 ],
-              ),
-              subtitle: Text(r.comment),
-              trailing: Text(
-                "${r.createdAt.day}/${r.createdAt.month}/${r.createdAt.year}",
-                style: const TextStyle(color: AppColors.GREY, fontSize: 12),
               ),
             );
           },
@@ -599,76 +660,78 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   Widget _buildBottomButtons() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: const BoxDecoration(
-        color: AppColors.WHITE,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.BLACK_12,
-            blurRadius: 8,
-            offset: Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.THEME_COLOR,
-                foregroundColor: AppColors.WHITE,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              icon: const Icon(Icons.directions),
-              label: const Text("Direction"),
-              onPressed: () async {
-                final lat = widget.listing.geo.lat;
-                final lng = widget.listing.geo.lng;
-
-                Uri url;
-
-                if (Platform.isIOS) {
-                  // Apple Maps
-                  url = Uri.parse("http://maps.apple.com/?daddr=$lat,$lng");
-                } else {
-                  // Google Maps (Android or fallback)
-                  url = Uri.parse(
-                    "https://www.google.com/maps/dir/?api=1&destination=$lat,$lng",
-                  );
-                }
-
-                if (!await launchUrl(
-                  url,
-                  mode: LaunchMode.externalApplication,
-                )) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Could not open Maps")),
-                  );
-                }
-              },
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: const BoxDecoration(
+          color: AppColors.WHITE,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.BLACK_12,
+              blurRadius: 8,
+              offset: Offset(0, -2),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.THEME_COLOR,
-                foregroundColor: AppColors.WHITE,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.THEME_COLOR,
+                  foregroundColor: AppColors.WHITE,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
+                icon: const Icon(Icons.directions),
+                label: const Text("Direction"),
+                onPressed: () async {
+                  final lat = widget.listing.geo.lat;
+                  final lng = widget.listing.geo.lng;
+
+                  Uri url;
+
+                  if (Platform.isIOS) {
+                    // Apple Maps
+                    url = Uri.parse("http://maps.apple.com/?daddr=$lat,$lng");
+                  } else {
+                    // Google Maps (Android or fallback)
+                    url = Uri.parse(
+                      "https://www.google.com/maps/dir/?api=1&destination=$lat,$lng",
+                    );
+                  }
+
+                  if (!await launchUrl(
+                    url,
+                    mode: LaunchMode.externalApplication,
+                  )) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Could not open Maps")),
+                    );
+                  }
+                },
               ),
-              icon: const Icon(Icons.call),
-              label: const Text("Call"),
-              onPressed: () => _launchCaller(widget.listing.phone),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.THEME_COLOR,
+                  foregroundColor: AppColors.WHITE,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.call),
+                label: const Text("Call"),
+                onPressed: () => _launchCaller(widget.listing.phone),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -773,9 +836,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       CommonMethods.navigateToSignInScreen(context);
       return;
     }
-    setState(() {
-      _isChatLoading = true;
-    });
+    setState(() => _isChatLoading = true);
     final currentUser = FirebaseAuth.instance.currentUser!;
     final ownerId = widget.listing.ownerId;
 
@@ -783,6 +844,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("You cannot chat with yourself.")),
       );
+      setState(() => _isChatLoading = false);
+
       return;
     }
 
@@ -815,11 +878,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       conversationId = newDoc.id;
     }
 
-    String? title = await ownerName;
-
-    setState(() {
-      _isChatLoading = false;
-    });
+    setState(() => _isChatLoading = false);
 
     // Navigate to Chat Room
     Navigator.push(
@@ -830,8 +889,98 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               conversationId: conversationId,
               otherUserId: widget.listing.ownerId,
               type: "direct",
-              title: title ?? 'Owner',
+              title: widget.listing.ownerName,
             ),
+      ),
+    );
+  }
+}
+
+class _FullScreenImageView extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+
+  const _FullScreenImageView({required this.images, this.initialIndex = 0});
+
+  @override
+  State<_FullScreenImageView> createState() => _FullScreenImageViewState();
+}
+
+class _FullScreenImageViewState extends State<_FullScreenImageView> {
+  late PageController _controller;
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _controller = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        alignment: Alignment.center,
+        children: [
+          /// 🔹 Image PageView
+          PageView.builder(
+            controller: _controller,
+            itemCount: widget.images.length,
+            onPageChanged: (index) => setState(() => _currentIndex = index),
+            itemBuilder: (context, index) {
+              return InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: CachedNetworkImage(
+                  imageUrl: widget.images[index],
+                  fit: BoxFit.contain,
+                  placeholder:
+                      (context, url) =>
+                          const Center(child: CircularProgressIndicator()),
+                  errorWidget:
+                      (context, url, error) =>
+                          const Icon(Icons.broken_image, color: Colors.white),
+                ),
+              );
+            },
+          ),
+
+          /// 🔹 Close Button (top-right)
+          Positioned(
+            top: 40,
+            right: 20,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+
+          /// 🔹 Dots Indicator (bottom-center)
+          Positioned(
+            bottom: 30,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                widget.images.length,
+                (index) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: _currentIndex == index ? 10 : 6,
+                  height: _currentIndex == index ? 10 : 6,
+                  decoration: BoxDecoration(
+                    color:
+                        _currentIndex == index
+                            ? AppColors.THEME_COLOR
+                            : Colors.white.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

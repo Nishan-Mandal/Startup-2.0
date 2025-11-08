@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
-import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/bottom_nav_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signup_screen.dart';
@@ -12,7 +11,8 @@ import 'package:startup_20/providers/bottom_nav_provider.dart';
 import 'otp_screen.dart';
 
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key});
+  final bool skip;
+  const SignInScreen({super.key, required this.skip});
 
   @override
   _SignInScreenState createState() => _SignInScreenState();
@@ -29,7 +29,7 @@ class _SignInScreenState extends State<SignInScreen> {
     super.dispose();
   }
 
-  Future<void> _sendOTP() async {
+  Future<void> _sendOTP(String userName) async {
     if (phoneController.text.isEmpty || phoneController.text.length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter a valid mobile number")),
@@ -57,7 +57,7 @@ class _SignInScreenState extends State<SignInScreen> {
               builder:
                   (_) => OtpScreen(
                     verificationId: verificationId,
-                    userName: "",
+                    userName: userName,
                     phoneNumber: phoneController.text.trim(),
                   ),
             ),
@@ -74,7 +74,7 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  Future<bool> checkUserExists(String phoneNumber) async {
+  Future<String?> checkUserExists(String phoneNumber) async {
     try {
       final querySnapshot =
           await FirebaseFirestore.instance
@@ -83,11 +83,15 @@ class _SignInScreenState extends State<SignInScreen> {
               .limit(1)
               .get();
 
-      return querySnapshot.docs.isNotEmpty;
+      if (querySnapshot.docs.isNotEmpty) {
+        final userData = querySnapshot.docs.first.data();
+        return userData['name']; // ✅ Return user name
+      }
+      return null;
     } catch (e) {
       setState(() => isLoading = false);
       print("Error checking user existence: $e");
-      return false;
+      return null;
     }
   }
 
@@ -104,41 +108,43 @@ class _SignInScreenState extends State<SignInScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    InkWell(
-                      onTap: () async {
-                        CommonWidgets.showLoader(context);
-                        await authProvider.signInAnonymously();
-                        CommonWidgets.hideLoader();
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (context) => ChangeNotifierProvider(
-                                  create: (_) => BottomNavProvider(),
-                                  child: const BottomNavScreen(),
-                                ),
-                          ),
-                        );
-                      },
-                      child: Text("Skip"),
-                    ),
-                  ],
-                ),
+                widget.skip
+                    ? Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        InkWell(
+                          onTap: () async {
+                            CommonWidgets.showLoader(context);
+                            await authProvider.signInAnonymously();
+                            await FirebaseAuth.instance.currentUser
+                                ?.updateDisplayName('Anonymous');
+                            CommonWidgets.hideLoader();
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder:
+                                    (context) => ChangeNotifierProvider(
+                                      create: (_) => BottomNavProvider(),
+                                      child: const BottomNavScreen(),
+                                    ),
+                              ),
+                            );
+                          },
+                          child: Text("Skip"),
+                        ),
+                      ],
+                    )
+                    : SizedBox(),
                 // 👋 Illustration or logo
                 SizedBox(
                   height: 200,
                   width: 200,
-                  child: CachedNetworkSvg(
-                    url:
-                        'https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/static%2FSignUp.svg?alt=media&token=ff2098b5-9e52-442f-a311-33c241cd2668',
+                  child: Image.asset(
+                        'assets/images/EasyFindLogo.png',
                     fit: BoxFit.cover,
                     width: double.infinity,
                     height: double.infinity,
-                    errorWidget: const Icon(Icons.broken_image),
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -170,7 +176,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     border: OutlineInputBorder(),
                     prefixText: "+91 ",
                     hintText: "Enter mobile number",
-                    hintStyle: TextStyle(color: AppColors.BLACK_54,)
+                    hintStyle: TextStyle(color: AppColors.BLACK_54),
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -182,11 +188,12 @@ class _SignInScreenState extends State<SignInScreen> {
                     onPressed: () async {
                       if (!isLoading) {
                         setState(() => isLoading = true);
-                        Future<bool> isUserExist = checkUserExists(
+                        final userName = await checkUserExists(
                           phoneController.text.trim(),
                         );
-                        if (await isUserExist) {
-                          _sendOTP();
+
+                        if (userName != null) {
+                          _sendOTP(userName);
                         } else {
                           setState(() => isLoading = false);
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -199,7 +206,11 @@ class _SignInScreenState extends State<SignInScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => SignUpScreen(phoneNumber: phoneController.text,),
+                              builder:
+                                  (_) => SignUpScreen(
+                                    phoneNumber: phoneController.text,
+                                    skip: widget.skip,
+                                  ),
                             ),
                           );
                         }
@@ -246,7 +257,11 @@ class _SignInScreenState extends State<SignInScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const SignUpScreen(phoneNumber: "",),
+                            builder:
+                                (_) => SignUpScreen(
+                                  phoneNumber: "",
+                                  skip: widget.skip,
+                                ),
                           ),
                         );
                       },

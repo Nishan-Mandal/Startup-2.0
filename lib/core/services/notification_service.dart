@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -50,14 +52,14 @@ class NotificationService {
 
     // 🔹 When tapped (background → foreground)
     FirebaseMessaging.onMessageOpenedApp.listen((message) async {
-      _handleNavigation(message.data);
+      _handleNavigation(message.data as String?);
       await _saveNotificationToFirestore(message);
     });
 
     // 🔹 When opened from terminated state
     final initialMessage = await firebaseMessaging.getInitialMessage();
     if (initialMessage != null) {
-      _handleNavigation(initialMessage.data);
+      _handleNavigation(initialMessage.data as String?);
       await _saveNotificationToFirestore(initialMessage);
     }
 
@@ -89,7 +91,10 @@ class NotificationService {
       message.notification?.title ?? "Notification",
       message.notification?.body ?? "",
       notificationDetails,
-      payload: message.data['route'],
+      payload: jsonEncode({
+        'route': message.data['route'],
+        'listingId': message.data['listingId'],
+      }),
     );
   }
 
@@ -100,7 +105,10 @@ class NotificationService {
     try {
       final user = FirebaseAuth.instance.currentUser;
 
-      if (user == null || user.isAnonymous || message.data['type'] == 'chat') {
+      if (user == null ||
+          user.isAnonymous ||
+          message.data['type'] == null ||
+          message.data['type'] == 'chat') {
         debugPrint('⚠️ Skipped saving notification: No authenticated user');
         return;
       }
@@ -129,32 +137,44 @@ class NotificationService {
 
       await docRef.set(notificationData);
 
-      debugPrint('✅ Notification saved for user → ${user.email}');
+      debugPrint('✅ Notification saved for user → ${user.displayName}');
     } catch (e) {
       debugPrint('❌ Error saving user notification: $e');
     }
   }
 
   /// Handle navigation when notification is tapped
-  static void _handleNavigation(dynamic payload) {
-    if (payload == null) return;
+static void _handleNavigation(String? payload) {
+  if (payload == null || payload.isEmpty) return;
 
-    // payload can be string or map, handle both
-    String? route;
-    String? listingId;
-
-    if (payload is Map<String, dynamic>) {
-      route = payload['route'];
-      listingId = payload['listingId'];
-    } else if (payload is String) {
-      route = payload;
-    }
-
-    if (route != null) {
-      navigatorKey.currentState?.pushNamed(
-        route,
-        arguments: {'listingId': listingId},
-      );
-    }
+  dynamic decoded;
+  try {
+    decoded = jsonDecode(payload); // 🔹 Convert string back to Map
+  } catch (e) {
+    debugPrint("Invalid JSON payload: $payload");
+    return;
   }
+
+  String? route;
+  String? listingId;
+
+  if (decoded is Map<String, dynamic>) {
+    route = decoded['route'];
+    listingId = decoded['listingId'];
+  } else if (decoded is String) {
+    route = decoded;
+  }
+
+  if (route == '/listingDetail' && listingId != null) {
+    navigatorKey.currentState?.pushNamed(
+      '/listingDetail',
+      arguments: {'listingId': listingId},
+    );
+  } else if (route == '/chatScreen') {
+    navigatorKey.currentState?.pushNamed('/chatScreen');
+  } else if (route == '/notifications') {
+    navigatorKey.currentState?.pushNamed('/notifications');
+  }
+}
+
 }

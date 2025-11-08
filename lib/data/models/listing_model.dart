@@ -9,10 +9,12 @@ class Listing {
   final Geo geo;
   final String phone;
   final String category;
+  final String categoryId;
   final List<String> tags;
   final String addedBy;
   final bool isClaimed;
   final String ownerId;
+  final String ownerName;
   final String claimStatus;
   final String? verifiedBy;
   final DateTime createdAt;
@@ -30,10 +32,12 @@ class Listing {
     required this.geo,
     required this.phone,
     required this.category,
+    required this.categoryId,
     required this.tags,
     required this.addedBy,
     required this.isClaimed,
     required this.ownerId,
+    required this.ownerName,
     required this.claimStatus,
     this.verifiedBy,
     required this.createdAt,
@@ -53,10 +57,12 @@ class Listing {
       geo: Geo.fromJson(json['geo'] ?? {}),
       phone: json['phone'] ?? '',
       category: json['category'] ?? '',
+      categoryId: json['categoryId'] ?? '',
       tags: List<String>.from(json['tags'] ?? []),
       addedBy: json['addedBy'] ?? '',
       isClaimed: json['isClaimed'] ?? false,
       ownerId: json['ownerId'],
+      ownerName: json['ownerName']?? 'Unknown',
       claimStatus: json['claimStatus'] ?? 'unclaimed',
       verifiedBy: json['verifiedBy'],
       createdAt: (json['createdAt'] as Timestamp).toDate(),
@@ -80,10 +86,12 @@ class Listing {
       'geo': geo.toJson(),
       'phone': phone,
       'category': category,
+      'categoryId': categoryId,
       'tags': tags,
       'addedBy': addedBy,
       'isClaimed': isClaimed,
       'ownerId': ownerId,
+      'ownerName': ownerName,
       'claimStatus': claimStatus,
       'verifiedBy': verifiedBy,
       'createdAt': createdAt,

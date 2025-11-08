@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/screens/category_screen.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_screen.dart';
 import 'package:startup_20/presentation/screens/contribute_screen.dart';
@@ -14,21 +15,40 @@ import 'package:startup_20/providers/chat_provider.dart';
 import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
 
 class BottomNavScreen extends StatefulWidget {
-  const BottomNavScreen({super.key});
+  final int initialIndex;
+  const BottomNavScreen({this.initialIndex = 0, Key? key}) : super(key: key);
 
   @override
   State<BottomNavScreen> createState() => _BottomNavScreenState();
 }
 
-class _BottomNavScreenState extends State<BottomNavScreen> {
-  int selected = 0;
+class _BottomNavScreenState extends State<BottomNavScreen>
+    with WidgetsBindingObserver {
   final controller = PageController();
 
   DateTime? lastBackPressed; // 👈 For tracking double back press timing
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    CommonMethods.onAppStart();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      CommonMethods.onAppClose();
+    } else if (state == AppLifecycleState.resumed) {
+      CommonMethods.onAppStart();
+    }
+  }
+
+  @override
   void dispose() {
     controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    CommonMethods.onAppClose();
     super.dispose();
   }
 
@@ -70,17 +90,16 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
           );
           return false;
         }
-
+        CommonMethods.onAppClose();
         return true; // 👈 Exit app on second back press
       },
-      child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: const SystemUiOverlayStyle(
-          statusBarColor: AppColors.THEME_COLOR,
-          statusBarIconBrightness: Brightness.light,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: AppColors.THEME_COLOR,
+          toolbarHeight: 8,
         ),
-        child: Scaffold(
-          extendBody: true,
-          bottomNavigationBar: AnimatedContainer(
+        bottomNavigationBar: SafeArea(
+          child: AnimatedContainer(
             duration: const Duration(milliseconds: 400),
             height: navProvider.isVisible ? kBottomNavigationBarHeight : 0,
             decoration: BoxDecoration(
@@ -151,19 +170,19 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
               ],
             ),
           ),
-          body: SafeArea(
-            child: IndexedStack(
-              index: navProvider.currentIndex,
-              children: [
-                HomeScreen(),
-                CategoryScreen(),
-                AppAuthProvider.isAnonymousUser() ? SignInScreen() : ChatScreen(),
-                AppAuthProvider.isAnonymousUser()
-                    ? SignInScreen()
-                    : ContributionScreen(),
-              ],
-            ),
-          ),
+        ),
+        body: IndexedStack(
+          index: navProvider.currentIndex,
+          children: [
+            HomeScreen(),
+            CategoryScreen(),
+            AppAuthProvider.isAnonymousUser()
+                ? SignInScreen(skip: false)
+                : ChatScreen(),
+            AppAuthProvider.isAnonymousUser()
+                ? SignInScreen(skip: false)
+                : ContributionScreen(),
+          ],
         ),
       ),
     );

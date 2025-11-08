@@ -18,17 +18,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     {
       "image": "assets/images/onboarding1.png",
       "title": "🌍 Discover Your Local World",
-      "description": "Find nearby shops, services, and events all in one place. From groceries to salons, everything you need is right around the corner.",
+      "description":
+          "Find nearby shops, services, and events all in one place. From groceries to salons, everything you need is right around the corner.",
     },
     {
       "image": "assets/images/onboarding2.png",
       "title": "💬 Connect With Your Community",
-      "description": "Chat with locals, get help, and share updates that matter to your area. Together, we make our neighborhoods stronger.",
+      "description":
+          "Chat with locals, get help, and share updates that matter to your area. Together, we make our neighborhoods stronger.",
     },
     {
       "image": "assets/images/onboarding3.png",
       "title": "🏆 Contribute. Earn. Grow",
-      "description": "Add new shops and services around you, help others discover them, and earn Kudos, your reward for making a difference.",
+      "description":
+          "Add new shops and services around you, help others discover them, and earn Kudos, your reward for making a difference.",
     },
   ];
 
@@ -40,19 +43,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   void dispose() {
-     _pageController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
-Future<void> _checkIfOnboardingSeen() async {
-  final prefs = await SharedPreferences.getInstance();
-  final seen = prefs.getBool('onboarding_seen') ?? false;
-  if (seen) {
-    if (!mounted) return;
-    _navigateToNextScreen();
+  Future<void> _checkIfOnboardingSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool('onboarding_seen') ?? false;
+    if (seen) {
+      if (!mounted) return;
+      _navigateToNextScreen();
+    }
   }
-}
-
 
   Future<void> _markOnboardingSeen() async {
     final prefs = await SharedPreferences.getInstance();
@@ -62,23 +64,22 @@ Future<void> _checkIfOnboardingSeen() async {
   void _navigateToNextScreen() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const SignInScreen()), 
+      MaterialPageRoute(builder: (context) => const SignInScreen(skip: true)),
     );
   }
 
-void _onNext() async {
-  if (_currentPage == onboardingData.length - 1) {
-    await _markOnboardingSeen();
-    if (!mounted) return;
-    _navigateToNextScreen();
-  } else {
-    _pageController.nextPage(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOut,
-    );
+  void _onNext() async {
+    if (_currentPage == onboardingData.length - 1) {
+      await _markOnboardingSeen();
+      if (!mounted) return;
+      _navigateToNextScreen();
+    } else {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
   }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -95,10 +96,7 @@ void _onNext() async {
                   await _markOnboardingSeen();
                   _navigateToNextScreen();
                 },
-                child: Text(
-                  "Skip",
-                  style: TextStyle(color: AppColors.THEME_COLOR),
-                ),
+                child: Text("Skip"),
               ),
             ),
             Expanded(
@@ -115,10 +113,7 @@ void _onNext() async {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Image.asset(
-                          item["image"]!,
-                          height: 250,
-                        ),
+                        Image.asset(item["image"]!, height: 250),
                         const SizedBox(height: 40),
                         Text(
                           item["title"]!,
@@ -154,9 +149,10 @@ void _onNext() async {
                   height: 8,
                   width: _currentPage == index ? 20 : 8,
                   decoration: BoxDecoration(
-                    color: _currentPage == index
-                        ? AppColors.THEME_COLOR
-                        : AppColors.GREY,
+                    color:
+                        _currentPage == index
+                            ? AppColors.THEME_COLOR
+                            : AppColors.GREY,
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
@@ -181,7 +177,10 @@ void _onNext() async {
                     _currentPage == onboardingData.length - 1
                         ? "Get Started"
                         : "Next",
-                    style: const TextStyle(fontSize: 16, color: AppColors.WHITE),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: AppColors.WHITE,
+                    ),
                   ),
                 ),
               ),

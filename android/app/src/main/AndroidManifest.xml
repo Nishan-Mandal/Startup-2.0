@@ -9,6 +9,9 @@
         android:label="EasyFind"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyBrWhs0x-66O88eOnlO-_1WztjU-QxOWBE"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

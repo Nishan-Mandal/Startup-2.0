@@ -63,7 +63,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text("Profile",style: TextStyle(color: AppColors.WHITE),),
+          title: const Text(
+            "Profile",
+            style: TextStyle(color: AppColors.WHITE),
+          ),
           centerTitle: true,
           iconTheme: const IconThemeData(color: AppColors.WHITE),
           backgroundColor: AppColors.THEME_COLOR,
@@ -79,155 +82,165 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: AppColors.GREY_SHADE_100,
       appBar: AppBar(
-        title: const Text("Profile",style: TextStyle(color: AppColors.WHITE)),
+        title: const Text("Profile", style: TextStyle(color: AppColors.WHITE)),
         centerTitle: true,
         iconTheme: const IconThemeData(color: AppColors.WHITE),
         backgroundColor: AppColors.THEME_COLOR,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // 🧍 User Info Section
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: AppColors.WHITE,
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    child: Text(CommonMethods.getInitials(currentUser!.name),style: TextStyle(fontWeight: FontWeight.bold),),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // 🧍 User Info Section
+              Container(
+                padding: const EdgeInsets.all(16),
+                color: AppColors.WHITE,
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      child: Text(
+                        CommonMethods.getInitials(currentUser!.name),
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            currentUser!.name,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(currentUser!.phone ?? ""),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        
+              const SizedBox(height: 12),
+        
+              // 💰 Kudos Wallet
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.WHITE,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Your Kudos",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    Row(
                       children: [
-                        Text(
-                          currentUser!.name,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                        const Icon(Icons.handshake, color: AppColors.AMBER),
+                        const SizedBox(width: 6),
+                        Text("${currentUser!.kudos ?? 0}"),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: () {},
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.THEME_COLOR,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            "Redeem",
+                            style: TextStyle(color: AppColors.WHITE),
                           ),
                         ),
-                        Text(currentUser!.phone ?? ""),
-                        const SizedBox(height: 8),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // 💰 Kudos Wallet
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.WHITE,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Your Kudos",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Row(
-                    children: [
-                      const Icon(Icons.handshake, color: AppColors.AMBER),
-                      const SizedBox(width: 6),
-                      Text("${currentUser!.kudos ?? 0}"),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.THEME_COLOR,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text("Redeem",style: TextStyle(color: AppColors.WHITE),),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            /// 🔹 My Activity Section
-            _buildSection("My Activity", [
-              _buildTile(Icons.store, "My Listings", () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (context) => ListingPage(
-                          title: "My Listings",
-                          query: FirebaseFirestore.instance
-                              .collection("listings")
-                              .where("addedBy", isEqualTo: currentUser!.userId)
-                              .orderBy("createdAt", descending: true),
-                        ),
-                  ),
-                );
-              }),
-              _buildTile(Icons.group_add, "My Referrals", () {}),
-              _buildTile(Icons.favorite, "Saved Services", () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (context) => ListingPage(
-                          title: "Saved Services",
-                          query: FirebaseFirestore.instance
-                              .collection("listings")
-                              .where(FieldPath.documentId, whereIn: favIds),
-                        ),
-                  ),
-                );
-              }),
-            ]),
-
-            /// 🔹 Rewards Section
-            _buildSection("Rewards & Kudos (coming soon)", [
-              _buildTile(Icons.wallet_giftcard, "Kudos Wallet", () {}),
-              _buildTile(Icons.history, "Redeem History", () {}),
-            ]),
-
-            /// 🔹 Settings Section
-            _buildSection("Settings", [
-              _buildTile(Icons.lock, "Privacy & Security", () {}),
-              _buildTile(Icons.language, "Language & Region", () {}),
-              _buildTile(Icons.help, "Help & Support", () {}),
-              _buildTile(Icons.info, "About Us", () {}),
-            ]),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: ElevatedButton(
-                onPressed: () {
-                  authProvider.signOut();
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => SignInScreen()),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.WHITE,
-                  minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  ],
                 ),
-                child: const Text("Logout"),
               ),
-            ),
-          ],
+        
+              const SizedBox(height: 20),
+        
+              /// 🔹 My Activity Section
+              _buildSection("My Activity", [
+                _buildTile(Icons.store, "My Listings", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (context) => ListingPage(
+                            title: "My Listings",
+                            query: FirebaseFirestore.instance
+                                .collection("listings")
+                                .where("addedBy", isEqualTo: currentUser!.userId)
+                                .orderBy("createdAt", descending: true),
+                          ),
+                    ),
+                  );
+                }),
+                _buildTile(Icons.group_add, "My Referrals", () {}),
+                _buildTile(Icons.favorite, "Saved Services", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (context) => ListingPage(
+                            title: "Saved Services",
+                            query: FirebaseFirestore.instance
+                                .collection("listings")
+                                .where(FieldPath.documentId, whereIn: favIds),
+                          ),
+                    ),
+                  );
+                }),
+              ]),
+        
+              /// 🔹 Rewards Section
+              _buildSection("Rewards & Kudos (coming soon)", [
+                _buildTile(Icons.wallet_giftcard, "Kudos Wallet", () {}),
+                _buildTile(Icons.history, "Redeem History", () {}),
+              ]),
+        
+              /// 🔹 Settings Section
+              _buildSection("Settings", [
+                _buildTile(Icons.lock, "Privacy & Security", () {}),
+                _buildTile(Icons.language, "Language & Region", () {}),
+                _buildTile(Icons.help, "Help & Support", () {}),
+                _buildTile(Icons.info, "About Us", () {}),
+              ]),
+        
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: ElevatedButton(
+                  onPressed: () {
+                    authProvider.signOut();
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SignInScreen(skip: false),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.WHITE,
+                    minimumSize: const Size.fromHeight(50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text("Logout"),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

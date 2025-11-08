@@ -43,7 +43,8 @@ class _CachedNetworkSvgState extends State<CachedNetworkSvg> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return widget.placeholder ??
               const Center(child: CircularProgressIndicator(strokeWidth: 1.5));
-        } else if (snapshot.hasError || !snapshot.hasData) {
+        } else 
+        if (snapshot.hasError || !snapshot.hasData) {
           return widget.errorWidget ??
               const Icon(Icons.error, color: AppColors.RED);
         } else {

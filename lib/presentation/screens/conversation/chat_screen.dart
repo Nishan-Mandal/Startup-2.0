@@ -79,10 +79,23 @@ class _ChatScreenState extends State<ChatScreen> {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  final conversations =
+                  final allConversations =
                       snapshot.data!.docs
                           .map((doc) => Conversation.fromDoc(doc))
                           .toList();
+
+                  // ✅ Filter only group chats OR direct chats containing this user
+                  final conversations =
+                      allConversations.where((conv) {
+                        if (conv.type == 'group')
+                          return true; // include all groups
+                        if (conv.type == 'direct') {
+                          return conv.participantIds.contains(
+                            FirebaseAuth.instance.currentUser!.uid,
+                          ); // include only if user is participant
+                        }
+                        return false;
+                      }).toList();
 
                   if (conversations.isEmpty) {
                     return const Center(child: Text("No conversations yet"));

@@ -11,7 +11,12 @@ import 'otp_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   final String phoneNumber;
-  const SignUpScreen({super.key, required this.phoneNumber});
+  final bool skip;
+  const SignUpScreen({
+    super.key,
+    required this.phoneNumber,
+    required this.skip,
+  });
 
   @override
   _SignUpScreenState createState() => _SignUpScreenState();
@@ -43,7 +48,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ).showSnackBar(const SnackBar(content: Text("Please enter your name")));
       return;
     }
-    
+
     if (phoneController.text.isEmpty || phoneController.text.length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter a valid mobile number")),
@@ -104,40 +109,41 @@ class _SignUpScreenState extends State<SignUpScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    InkWell(
-                      onTap: () async {
-                        CommonWidgets.showLoader(context);
-                        await authProvider.signInAnonymously();
-                        CommonWidgets.hideLoader();
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (context) => ChangeNotifierProvider(
-                                  create: (_) => BottomNavProvider(),
-                                  child: const BottomNavScreen(),
-                                ),
-                          ),
-                        );
-                      },
-                      child: Text("Skip"),
-                    ),
-                  ],
-                ),
+                widget.skip
+                    ? Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        InkWell(
+                          onTap: () async {
+                            CommonWidgets.showLoader(context);
+                            await authProvider.signInAnonymously();
+                            await FirebaseAuth.instance.currentUser
+                                ?.updateDisplayName('Anonymous');
+                            CommonWidgets.hideLoader();
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder:
+                                    (context) => ChangeNotifierProvider(
+                                      create: (_) => BottomNavProvider(),
+                                      child: const BottomNavScreen(),
+                                    ),
+                              ),
+                            );
+                          },
+                          child: Text("Skip"),
+                        ),
+                      ],
+                    ):SizedBox(),
                 SizedBox(
                   height: 200,
                   width: 200,
-                  child: CachedNetworkSvg(
-                    url:
-                        'https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/static%2FSignUp.svg?alt=media&token=ff2098b5-9e52-442f-a311-33c241cd2668',
+                  child: Image.asset(
+                        'assets/images/EasyFindLogo.png',
                     fit: BoxFit.cover,
                     width: double.infinity,
                     height: double.infinity,
-                    errorWidget: const Icon(Icons.broken_image),
                   ),
                 ),
 
