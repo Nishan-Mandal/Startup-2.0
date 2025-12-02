@@ -156,15 +156,17 @@ class _LocationPickerState extends State<LocationPicker> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context, _currentLatLng);
-                          },
-                          icon: const Icon(Icons.check,color: AppColors.WHITE,),
-                          label: const Text('Confirm Location', style: TextStyle(color: AppColors.WHITE),),
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(45),
-                            backgroundColor: AppColors.THEME_COLOR
+                        SafeArea(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context, _currentLatLng);
+                            },
+                            icon: const Icon(Icons.check,color: AppColors.WHITE,),
+                            label: const Text('Confirm Location', style: TextStyle(color: AppColors.WHITE),),
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(45),
+                              backgroundColor: AppColors.THEME_COLOR
+                            ),
                           ),
                         ),
                       ],

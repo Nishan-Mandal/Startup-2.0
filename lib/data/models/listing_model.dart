@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Listing {
@@ -6,6 +8,7 @@ class Listing {
   final String name;
   final String address;
   final String description;
+  final Map<String, dynamic> details;
   final Geo geo;
   final String phone;
   final String category;
@@ -22,6 +25,7 @@ class Listing {
   final List<ImageFile> images;
   final int reviews;
   final double rating;
+  final List<File>? localImages;
 
   Listing({
     required this.listingId,
@@ -29,6 +33,7 @@ class Listing {
     required this.name,
     required this.address,
     required this.description,
+    required this.details,
     required this.geo,
     required this.phone,
     required this.category,
@@ -45,6 +50,7 @@ class Listing {
     required this.images,
     required this.reviews,
     required this.rating,
+    this.localImages,
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) {
@@ -54,6 +60,9 @@ class Listing {
       name: json['name'] ?? '',
       address: json['address'] ?? '',
       description: json['description'] ?? '',
+      details: json['details'] != null
+        ? Map<String, dynamic>.from(json['details'])
+        : {},  
       geo: Geo.fromJson(json['geo'] ?? {}),
       phone: json['phone'] ?? '',
       category: json['category'] ?? '',
@@ -83,6 +92,7 @@ class Listing {
       'name': name,
       'address': address,
       'description': description,
+      'details': details,
       'geo': geo.toJson(),
       'phone': phone,
       'category': category,

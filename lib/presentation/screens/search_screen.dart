@@ -116,6 +116,7 @@ class _SearchScreenState extends State<SearchScreen> {
       final listingByTags =
           await FirebaseFirestore.instance
               .collection("listings")
+              .where("verifiedBy", isNull: false)
               .where(
                 "tags",
                 arrayContainsAny: [
@@ -130,6 +131,7 @@ class _SearchScreenState extends State<SearchScreen> {
       final listingByName =
           await FirebaseFirestore.instance
               .collection("listings")
+              .where("verifiedBy", isNull: false)
               .where("name", isGreaterThanOrEqualTo: capitalized)
               .where("name", isLessThan: capitalized + '\uf8ff')
               .get();
@@ -378,6 +380,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           query: FirebaseFirestore.instance
                               .collection("listings")
                               .where("category", isEqualTo: category.name)
+                              .where("verifiedBy", isNull: false)
                               .orderBy("createdAt", descending: true),
                         ),
                   ),

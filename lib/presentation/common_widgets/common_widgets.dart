@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -34,7 +35,7 @@ class CommonWidgets {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 15, ),
+          padding: const EdgeInsets.symmetric(horizontal: 15),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -43,7 +44,7 @@ class CommonWidgets {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    "EasyFind",
+                    "Findon 👀",
                     style: TextStyle(
                       fontSize: 23,
                       fontWeight: FontWeight.bold,
@@ -72,7 +73,7 @@ class CommonWidgets {
 
   /// 🔹 Notifications Button
   static Widget _notifications(BuildContext context) {
-    final authProvider = Provider.of<AppAuthProvider>(context);
+    final appUser = context.watch<AppAuthProvider>().appUser;
 
     if (AppAuthProvider.isAnonymousUser()) {
       // If not logged in or anonymous → no unread count stream
@@ -106,7 +107,7 @@ class CommonWidgets {
       stream:
           FirebaseFirestore.instance
               .collection('users')
-              .doc(authProvider.user?.uid)
+              .doc(appUser?.userId)
               .collection('notifications')
               .where('isRead', isEqualTo: false)
               .snapshots(),
@@ -187,7 +188,7 @@ class CommonWidgets {
             builder:
                 (context) =>
                     AppAuthProvider.isAnonymousUser()
-                        ? SignInScreen(skip: false,)
+                        ? SignInScreen(skip: false)
                         : const ProfileScreen(),
           ),
         );
@@ -276,16 +277,17 @@ class CommonWidgets {
           // 🔹 Image
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Image.network(
-              listing.images.isNotEmpty
-                  ? (listing.images.first.thumbUrl.isNotEmpty
-                      ? listing.images.first.thumbUrl
-                      : listing.images.first.fullUrl)
-                  : "http://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/static%2FImage_Placeholder.jpg?alt=media&token=22a0ec73-6352-4885-bfaf-c485750af28f",
+            child: CachedNetworkImage(
+              imageUrl:
+                  listing.images.isNotEmpty
+                      ? (listing.images.first.thumbUrl.isNotEmpty
+                          ? listing.images.first.thumbUrl
+                          : listing.images.first.fullUrl)
+                      : "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/static%2FImage_Placeholder.jpg?alt=media&token=22a0ec73-6352-4885-bfaf-c485750af28f",
               height: 100,
               width: double.infinity,
               fit: BoxFit.cover,
-              errorBuilder:
+              errorWidget:
                   (_, __, ___) => Container(
                     height: 100,
                     width: double.infinity,

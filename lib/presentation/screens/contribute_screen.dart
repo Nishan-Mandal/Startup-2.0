@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/user_model.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
+import 'package:startup_20/presentation/screens/listing_screen.dart';
+import 'package:startup_20/providers/auth_provider.dart';
 
 class ContributionScreen extends StatefulWidget {
   const ContributionScreen({super.key});
@@ -95,7 +97,11 @@ class _ContributionScreenState extends State<ContributionScreen> {
               SizedBox(width: 4),
               Text(
                 currentUser == null ? '0' : '${currentUser?.kudos}',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.WHITE),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: AppColors.WHITE,
+                ),
               ),
               SizedBox(width: 12),
             ],
@@ -111,7 +117,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.GREY_SHADE_300,
+                color: AppColors.GREY_SHADE_100,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -119,7 +125,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.handshake, color: AppColors.AMBER, size: 32),
+                      Icon(Icons.handshake, color: AppColors.AMBER, size: 40),
                       SizedBox(width: 12),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,7 +159,10 @@ class _ContributionScreenState extends State<ContributionScreen> {
                       ),
                     ),
                     onPressed: () {},
-                    child: const Text("Redeem", style: TextStyle(color: AppColors.WHITE),),
+                    child: const Text(
+                      "Redeem",
+                      style: TextStyle(color: AppColors.WHITE),
+                    ),
                   ),
                 ],
               ),
@@ -184,6 +193,30 @@ class _ContributionScreenState extends State<ContributionScreen> {
                     );
                   },
                 ),
+                if (!AppAuthProvider.isAnonymousUser() &&
+                    currentUser?.role == 'admin')
+                  _contributionCard(
+                    icon: Icons.list_alt,
+                    title: "Submitted Listings",
+                    subtitle: "Waiting for your approval",
+                    reward: null,
+                    comingSoon: false,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (context) => ListingPage(
+                                title: 'Pending Approvals',
+                                query: FirebaseFirestore.instance
+                                    .collection("listings")
+                                    .where("verifiedBy", isNull: true)
+                                    .orderBy("createdAt"),
+                              ),
+                        ),
+                      );
+                    },
+                  ),
                 _contributionCard(
                   icon: Icons.group_add,
                   title: "Refer a friend",
@@ -207,7 +240,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.GREY_SHADE_300,
+                color: AppColors.GREY_SHADE_100,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -282,6 +315,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
               color: AppColors.GREY_SHADE_100,
               borderRadius: BorderRadius.circular(12),
             ),
+            width: double.infinity,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

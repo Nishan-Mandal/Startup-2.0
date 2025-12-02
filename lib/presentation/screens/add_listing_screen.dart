@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,36 +13,174 @@ import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_methods/location_picker.dart';
+import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:startup_20/data/models/category_model.dart' as models;
 import 'package:geocoding/geocoding.dart';
 
 class AddListingScreen extends StatefulWidget {
+  final Listing? existingListing;
+  const AddListingScreen({this.existingListing, Key? key}) : super(key: key);
   @override
   _AddListingScreenState createState() => _AddListingScreenState();
 }
 
 class _AddListingScreenState extends State<AddListingScreen> {
-  final TextEditingController _descriptionController = TextEditingController();
+  bool get isEditing => widget.existingListing != null;
+
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _ownerNameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _sinceController = TextEditingController();
+  final TextEditingController _availabilityController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _websiteController = TextEditingController();
+  final TextEditingController _instagramController = TextEditingController();
+  final TextEditingController _facebookController = TextEditingController();
+  final TextEditingController _linkedInController = TextEditingController();
+
+  bool acceptOnlinePayment = false;
 
   late double _latitude;
   late double _longitude;
   late Future<List<models.Category>> _categoriesFuture;
   String? _selectedCategoryId;
   String? _selectedCategoryName;
-  bool _isLoading = false;
 
   final List<File> _images = [];
+  List<ImageFile> _remoteImages = [];
+
+  // Sub Category Multi-select
+  List<String> subCategories = ["Office", "Bachelors", "MES", "Family"];
+  List<String> selectedSubCategories = [];
+
+  // Property Type Inputs
+  int roomNumber = 0;
+  int bathroomNumber = 0;
+  int balcony = 0;
+  int floorNumber = 0;
+  bool twoWheelerparking = false;
+  bool fourWheelerparking = false;
+
+  // Rent Price Inputs
+  int monthlyRent = 0;
+  bool cautionMoney = false;
+  int electricCharge = 0;
+  bool waterCharge = false;
+  bool otherCharge = false;
+  bool cctv = false;
 
   @override
   void initState() {
     super.initState();
     _categoriesFuture = fetchCategories();
+    _prePopulateData();
+  }
+
+  void _prePopulateData() {
+    _availabilityController.text =
+        "Mon: [10 AM – 9 PM]\nTue: [10 AM – 9 PM]\nWed: [Closed]\nThu: [10 AM – 9 PM]\nFri: [10 AM – 9 PM]\nSat: [10 AM – 9 PM]\nSun: [10 AM – 9 PM]";
+
+    if (isEditing) {
+      final listing = widget.existingListing!;
+
+      _nameController.text = listing.name;
+      _addressController.text = listing.address;
+      _descriptionController.text = listing.description;
+      _phoneController.text = listing.phone;
+      _ownerNameController.text = listing.ownerName;
+      _latitude = listing.geo.lat;
+      _longitude = listing.geo.lng;
+      _selectedCategoryId = listing.categoryId;
+      _selectedCategoryName = listing.category;
+
+      _sinceController.text = listing.details['Since'] ?? '';
+      _availabilityController.text =
+          listing.details['Availability'] ?? _availabilityController.text;
+      _emailController.text = listing.details['Email'] ?? '';
+      _websiteController.text = listing.details['Website'] ?? '';
+      _instagramController.text = listing.details['Instagram'] ?? '';
+      _facebookController.text = listing.details['Facebook'] ?? '';
+      _linkedInController.text = listing.details['LinkedIn'] ?? '';
+      acceptOnlinePayment =
+          listing.details['Accept Online Payments'] != null
+              ? listing.details['Accept Online Payments'] == 'Yes'
+                  ? true
+                  : false
+              : false;
+
+      //Room Rent
+      final availableFor = listing.details['Available For'];
+
+      if (availableFor is String) {
+        selectedSubCategories =
+            availableFor
+                .split(',')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList();
+      } else if (availableFor is List) {
+        selectedSubCategories =
+            availableFor
+                .map((e) => e.toString().trim())
+                .where((s) => s.isNotEmpty)
+                .toList();
+      } else {
+        selectedSubCategories = [];
+      }
+
+      roomNumber = listing.details['Room (s)'] ?? 0;
+      bathroomNumber = listing.details['Bathroom (s)'] ?? 0;
+      balcony = listing.details['Balcony (s)'] ?? 0;
+      floorNumber = listing.details['Floor Number'] ?? 0;
+      twoWheelerparking =
+          listing.details['Two Wheeler Parking'] != null
+              ? listing.details['Two Wheeler Parking'] == 'Yes'
+                  ? true
+                  : false
+              : false;
+      fourWheelerparking =
+          listing.details['Four Wheeler Parking'] != null
+              ? listing.details['Four Wheeler Parking'] == 'Yes'
+                  ? true
+                  : false
+              : false;
+      monthlyRent = listing.details['Monthly Rent'] ?? 0;
+      cautionMoney =
+          listing.details['Caution Money'] != null
+              ? listing.details['Caution Money'] == 'Yes'
+                  ? true
+                  : false
+              : false;
+      electricCharge = listing.details['Electric Charge'] ?? 0;
+      waterCharge =
+          listing.details['Water Charge'] != null
+              ? listing.details['Water Charge'] == 'Yes'
+                  ? true
+                  : false
+              : false;
+      otherCharge =
+          listing.details['Other Charges'] != null
+              ? listing.details['Other Charges'] == 'Yes'
+                  ? true
+                  : false
+              : false;
+      cctv =
+          listing.details['CCTV'] != null
+              ? listing.details['CCTV'] == 'Yes'
+                  ? true
+                  : false
+              : false;
+
+      // ⭐ Load already uploaded images (thumbnails) for preview
+      _remoteImages = List<ImageFile>.from(listing.images);
+    }
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// 🔹 Fetch categories from Firestore
@@ -65,219 +204,144 @@ class _AddListingScreenState extends State<AddListingScreen> {
     }
   }
 
-  /// Compress an image to Uint8List
-  /// Compress an image to Uint8List (nullable in case of failure)
-  Future<Uint8List?> _compressImage(
-    File file, {
-    required int minWidth,
-    required int minHeight,
-    required int quality,
-  }) async {
-    try {
-      if (kIsWeb) {
-        // Compression not supported on Web
-        debugPrint(
-          "Compression not supported on Web. Returning original file bytes.",
-        );
-        return await file.readAsBytes();
-      }
+  bool _didDataChange() {
+    final listing = widget.existingListing;
 
-      debugPrint('->>> Starting compression');
-      final result = await FlutterImageCompress.compressWithFile(
-        file.absolute.path,
-        minWidth: minWidth,
-        minHeight: minHeight,
-        quality: quality,
-      );
-      debugPrint('->>> Compression finished');
-
-      if (result == null) throw Exception("Image compression failed");
-      return result;
-    } catch (e, stack) {
-      debugPrint("Compression error: $e");
-      debugPrint("Stack trace: $stack");
-
-      // Fallback → return original bytes instead of crashing
-      try {
-        return await file.readAsBytes();
-      } catch (_) {
-        return null; // ultimate fallback
-      }
+    // If NEW listing → enable if user entered anything
+    if (listing == null) {
+      return _nameController.text.isNotEmpty ||
+          _addressController.text.isNotEmpty ||
+          _descriptionController.text.isNotEmpty ||
+          _ownerNameController.text.isNotEmpty ||
+          _phoneController.text.isNotEmpty ||
+          _selectedCategoryId != null ||
+          _images.isNotEmpty;
     }
+
+    // If EDITING → compare with old values
+    // if (_nameController.text.trim() != listing.name) return true;
+    // if (_addressController.text.trim() != listing.address) return true;
+    // if (_descriptionController.text.trim() != listing.description) return true;
+    // if (_phoneController.text.trim() != listing.phone) return true;
+    // if (_ownerNameController.text.trim() != listing.ownerName) return true;
+
+    // if (_selectedCategoryId != listing.categoryId) return true;
+    // if (_selectedCategoryName != listing.category) return true;
+
+    // if (_latitude != listing.geo.lat) return true;
+    // if (_longitude != listing.geo.lng) return true;
+
+    // // Images: changed if new images added or removed
+    // if (_images.isNotEmpty) return true;
+    // if (_remoteImages.length != listing.images.length) return true;
+
+    return true;
   }
 
-  /// Upload single image (full + thumbnail)
-  Future<Map<String, dynamic>> _uploadImage(File file, String listingId) async {
-    final storageRef = FirebaseStorage.instance.ref();
-    final fileId = const Uuid().v4();
-
-    // 📌 Print original file size
-    final originalSize = await file.length();
-    debugPrint(
-      "📷 Original image size: ${(originalSize / 1024).toStringAsFixed(2)} KB",
-    );
-
-    // Compress full image
-    final Uint8List? fullData = await _compressImage(
-      file,
-      minWidth: 1080,
-      minHeight: 1080,
-      quality: 75,
-    );
-
-    debugPrint(
-      "📷 Full image size: ${(fullData?.lengthInBytes ?? 0) / 1024} KB",
-    );
-
-    // Compress thumbnail
-    final Uint8List? thumbData = await _compressImage(
-      file,
-      minWidth: 300,
-      minHeight: 300,
-      quality: 50,
-    );
-
-    debugPrint(
-      "📷 Thumbnail size: ${(thumbData?.lengthInBytes ?? 0) / 1024} KB",
-    );
-
-    // Upload full
-    final fullRef = storageRef.child("listings/$listingId/full_$fileId.jpg");
-    await fullRef.putData(
-      fullData!,
-      SettableMetadata(contentType: "image/jpeg"),
-    );
-    final fullUrl = await fullRef.getDownloadURL();
-
-    // Upload thumbnail
-    final thumbRef = storageRef.child("listings/$listingId/thumb_$fileId.jpg");
-    await thumbRef.putData(
-      thumbData!,
-      SettableMetadata(contentType: "image/jpeg"),
-    );
-    final thumbUrl = await thumbRef.getDownloadURL();
-
-    return {"fullUrl": fullUrl, "thumbUrl": thumbUrl, "fileId": fileId};
-  }
-
-  /// Upload multiple images
-  Future<List<Map<String, dynamic>>> _uploadImages(
-    String contributionId,
-  ) async {
-    List<Map<String, dynamic>> uploaded = [];
-    for (var img in _images) {
-      final data = await _uploadImage(img, contributionId);
-      uploaded.add(data);
-    }
-    return uploaded;
-  }
-
-  /// Submit contribution
-  Future<void> _submitContribution() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // ✅ Validate mandatory fields
-      if (_addressController.text.trim().isEmpty ||
-          _nameController.text.trim().isEmpty ||
-          _phoneController.text.trim().isEmpty ||
-          _ownerNameController.text.trim().isEmpty ||
-          _selectedCategoryName == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Please fill in all required fields."),
-            backgroundColor: AppColors.RED,
-          ),
-        );
-        return;
-      }
-
-      final firestore = FirebaseFirestore.instance;
-
-      final listingDocRef = firestore.collection("listings").doc();
-      final contributionDocRef = firestore.collection("contributions").doc();
-
-      // ✅ Upload images
-      final imageList = await _uploadImages(listingDocRef.id);
-
-      // Convert uploaded image maps → ImageFile models
-      final images =
-          imageList
-              .map<ImageFile>(
-                (img) => ImageFile(
-                  fileId: img['fileId'],
-                  fullUrl: img['fullUrl'],
-                  thumbUrl: img['thumbUrl'],
-                ),
-              )
-              .toList();
-
-      // ✅ Create the Listing model object
-      final listing = Listing(
-        listingId: listingDocRef.id,
-        contributionId: contributionDocRef.id,
-        name: _nameController.text.trim(),
-        address: _addressController.text.trim(),
-        description: _descriptionController.text.trim(),
-        geo: Geo(lat: _latitude ?? 0.0, lng: _longitude ?? 0.0),
-        phone: _phoneController.text.trim(),
-        category: _selectedCategoryName!,
-        categoryId: _selectedCategoryId!,
-        tags: [_selectedCategoryName!],
-        addedBy: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
-        isClaimed: false,
-        ownerId: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
-        ownerName: _ownerNameController.text.trim(),
-        claimStatus: "pending",
-        verifiedBy: null,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        images: images,
-        reviews: 0,
-        rating: 0,
+  void _previewListing() {
+    if (!_didDataChange()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please update the data to preview!")),
       );
+      return;
+    }
 
-      // ✅ Create Contribution data
-      final contributionData = {
-        "contributionId": contributionDocRef.id,
-        "userId": FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
-        "listingId": listingDocRef.id,
-        "type": "add",
-        "status": "pending",
-        "reviewedBy": null,
-        "createdAt": FieldValue.serverTimestamp(),
-        "updatedAt": FieldValue.serverTimestamp(),
+    if (widget.existingListing == null &&
+        (_nameController.text.isEmpty ||
+            _addressController.text.isEmpty ||
+            _ownerNameController.text.isEmpty ||
+            _phoneController.text.isEmpty ||
+            _selectedCategoryId == null ||
+            _images.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill all required details!")),
+      );
+      return;
+    }
+
+    Map<String, dynamic> details = {};
+
+    if (_selectedCategoryName == 'Room Rent') {
+      details = {
+        'Monthly Rent': monthlyRent,
+        'Available For': selectedSubCategories.join(", "),
+        'Room (s)': roomNumber,
+        'Bathroom (s)': bathroomNumber,
+        'Balcony (s)': balcony,
+        'Floor Number': floorNumber,
+        'Two Wheeler Parking': twoWheelerparking ? 'Yes' : 'No',
+        'Four Wheeler Parking': fourWheelerparking ? 'Yes' : 'No',
+        'Caution Money': cautionMoney ? 'Yes' : 'No',
+        'Electric Charge': electricCharge,
+        'Water Charge': waterCharge ? 'Yes' : 'No',
+        'Other Charges': otherCharge ? 'Yes' : 'No',
+        'CCTV': cctv ? 'Yes' : 'No',
       };
-
-      // ✅ Save both documents
-      await listingDocRef.set(listing.toJson());
-      await contributionDocRef.set(contributionData);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("✅ Contribution submitted for review!"),
-            backgroundColor: AppColors.GREEN,
-          ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e, st) {
-      debugPrint("❌ Error while submitting contribution: $e\n$st");
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
+
+    addIfValid(details, 'Availability', _availabilityController.text.trim());
+    addIfValid(details, 'Email', _emailController.text.trim());
+    addIfValid(details, 'Website', _websiteController.text.trim());
+    addIfValid(details, 'Instagram', _instagramController.text.trim());
+    addIfValid(details, 'Facebook', _facebookController.text.trim());
+    addIfValid(details, 'LinkedIn', _linkedInController.text.trim());
+    addIfValid(details, 'Since', _sinceController.text.trim());
+    addIfValid(
+      details,
+      'Accept Online Payments',
+      acceptOnlinePayment ? 'Yes' : 'No',
+    );
+
+    final draftListing = Listing(
+      listingId: widget.existingListing?.listingId ?? "draft",
+      contributionId: widget.existingListing?.contributionId ?? "draft",
+      name: _nameController.text.trim(),
+      address: _addressController.text.trim(),
+      description: _descriptionController.text.trim(),
+      details: details,
+      geo: Geo(lat: _latitude, lng: _longitude),
+      phone: _phoneController.text.trim(),
+      category: _selectedCategoryName!,
+      categoryId: _selectedCategoryId!,
+      tags: [_selectedCategoryName!],
+      addedBy: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
+      ownerId: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
+      ownerName: _ownerNameController.text.trim(),
+      isClaimed: widget.existingListing?.isClaimed ?? false,
+      claimStatus: widget.existingListing?.claimStatus ?? "draft",
+      verifiedBy: widget.existingListing?.verifiedBy,
+      createdAt: widget.existingListing?.createdAt ?? DateTime.now(),
+      updatedAt: DateTime.now(),
+
+      // ⭐ REMOTE IMAGES (only if editing)
+      images: _remoteImages,
+
+      // ⭐ LOCAL IMAGES
+      localImages: _images, // files selected now
+
+      reviews: widget.existingListing?.reviews ?? 0,
+      rating: widget.existingListing?.rating ?? 0,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (context) => ListingDetailScreen(
+              listing: draftListing,
+              similarListings: [],
+              isPreview: true,
+              isEditing: isEditing,
+            ),
+      ),
+    );
+  }
+
+  void addIfValid(Map<String, dynamic> map, String key, dynamic value) {
+    if (value == null) return;
+    if (value is String && value.trim().isEmpty) return;
+    if (value is num && value == 0) return;
+    map[key] = value;
   }
 
   @override
@@ -286,9 +350,10 @@ class _AddListingScreenState extends State<AddListingScreen> {
       backgroundColor: AppColors.WHITE,
       appBar: AppBar(
         iconTheme: IconThemeData(color: AppColors.WHITE),
-        title: const Text(
-          "Upload Listing",
-          style: TextStyle(color: AppColors.WHITE),
+        centerTitle: true,
+        title: Text(
+          widget.existingListing == null ? "Add New Listing" : "Update Listing",
+          style: TextStyle(color: AppColors.WHITE, fontWeight: FontWeight.bold),
         ),
         backgroundColor: AppColors.THEME_COLOR,
       ),
@@ -328,6 +393,72 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // ⭐ NEW — show remote images if editing
+                  if (isEditing && _remoteImages.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: SizedBox(
+                        height: 120,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _remoteImages.length,
+                          itemBuilder: (context, index) {
+                            return Stack(
+                              children: [
+                                Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(
+                                      _remoteImages[index].thumbUrl,
+                                      width: 120,
+                                      height: 120,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        debugPrint(
+                                          widget.existingListing?.images.length
+                                              .toString(),
+                                        );
+                                        _remoteImages.removeAt(index);
+                                        debugPrint(
+                                          widget.existingListing?.images.length
+                                              .toString(),
+                                        );
+                                        debugPrint(
+                                          _remoteImages.length.toString(),
+                                        );
+                                      });
+                                    },
+                                    child: Container(
+                                      decoration: const BoxDecoration(
+                                        color: AppColors.BLACK_54,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 20,
+                                        color: AppColors.WHITE,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
 
                   // 📸 Preview selected images
                   if (_images.isNotEmpty)
@@ -470,6 +601,95 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  TextFormField(
+                    controller: _sinceController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4, // Accept only 4 digits
+                    decoration: const InputDecoration(
+                      labelText: "Since",
+                      border: OutlineInputBorder(),
+                      counterText: "", // hides the 0/4 counter
+                    ),
+
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly, // digits only
+                      LengthLimitingTextInputFormatter(4), // max 4 digits
+                    ],
+
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return "Please enter a year";
+                      }
+                      if (value.length != 4) {
+                        return "Year must be 4 digits";
+                      }
+
+                      final year = int.tryParse(value);
+                      final currentYear = DateTime.now().year;
+
+                      if (year == null || year < 1900 || year > currentYear) {
+                        return "Enter a valid year (1900–$currentYear)";
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: _availabilityController,
+                    maxLines: 7,
+                    decoration: const InputDecoration(
+                      labelText: "Availability",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: "Email",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: _websiteController,
+                    decoration: const InputDecoration(
+                      labelText: "Website",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: _instagramController,
+                    decoration: const InputDecoration(
+                      labelText: "Instagram",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _facebookController,
+                    decoration: const InputDecoration(
+                      labelText: "Facebook",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _linkedInController,
+                    decoration: const InputDecoration(
+                      labelText: "LinkedIn",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
                   // Category Dropdown
                   FutureBuilder<List<models.Category>>(
                     future: _categoriesFuture,
@@ -512,7 +732,15 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  if (_selectedCategoryName == 'Room Rent') _roomRentInfo(),
+
+                  SizedBox(height: 16),
+                  switchTile(
+                    "Accept Online Payments",
+                    acceptOnlinePayment,
+                    (v) => setState(() => acceptOnlinePayment = v),
+                  ),
+                  const SizedBox(height: 16),
 
                   // Submit Button
                   ElevatedButton(
@@ -523,24 +751,142 @@ class _AddListingScreenState extends State<AddListingScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    onPressed: _isLoading ? null : _submitContribution,
-                    child: const Text(
-                      "Submit Listing",
-                      style: TextStyle(color: AppColors.WHITE, fontSize: 16),
+                    onPressed: () {
+                      _previewListing();
+                    },
+                    child: Text(
+                      // isEditing ? "Update Listing" : "Submit Listing",
+                      "Pewiew",
+                      style: const TextStyle(
+                        color: AppColors.WHITE,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          // 🔹 Loading overlay
-          if (_isLoading)
-            Container(
-              color: AppColors.BLACK_54,
-              child: const Center(
-                child: CircularProgressIndicator(color: AppColors.THEME_COLOR),
-              ),
+        ],
+      ),
+    );
+  }
+
+  Widget _roomRentInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 25),
+
+        // Sub Category (Multi-select)
+        label("Available For:"),
+
+        Wrap(
+          spacing: 10,
+          children:
+              subCategories.map((cat) {
+                final isSelected = selectedSubCategories.contains(cat);
+                return ChoiceChip(
+                  label: Text(cat),
+                  selected: isSelected,
+                  selectedColor: Colors.blue.shade200,
+                  onSelected: (val) {
+                    setState(() {
+                      if (isSelected) {
+                        selectedSubCategories.remove(cat);
+                      } else {
+                        selectedSubCategories.add(cat);
+                      }
+                    });
+                  },
+                );
+              }).toList(),
+        ),
+
+        const SizedBox(height: 25),
+
+        CounterInput(
+          label: "Room (s)",
+          value: roomNumber,
+          onChanged: (val) => setState(() => roomNumber = val),
+        ),
+
+        CounterInput(
+          label: "Bathroom (s)",
+          value: bathroomNumber,
+          onChanged: (val) => setState(() => bathroomNumber = val),
+        ),
+
+        CounterInput(
+          label: "Balcony (s)",
+          value: balcony,
+          onChanged: (val) => setState(() => balcony = val),
+        ),
+
+        CounterInput(
+          label: "Floor Number",
+          value: floorNumber,
+          onChanged: (val) => setState(() => floorNumber = val),
+        ),
+
+        CounterInput(
+          label: "Monthly Rent",
+          value: monthlyRent,
+          onChanged: (val) => setState(() => monthlyRent = val),
+        ),
+
+        CounterInput(
+          label: "Electric Charge",
+          value: electricCharge,
+          onChanged: (val) => setState(() => electricCharge = val),
+        ),
+
+        switchTile(
+          "2 Wheeler Parking",
+          twoWheelerparking,
+          (v) => setState(() => twoWheelerparking = v),
+        ),
+
+        switchTile(
+          "4 Wheeler Parking",
+          fourWheelerparking,
+          (v) => setState(() => fourWheelerparking = v),
+        ),
+
+        switchTile(
+          "Other Charges",
+          otherCharge,
+          (v) => setState(() => otherCharge = v),
+        ),
+
+        switchTile("CCTV", cctv, (v) => setState(() => cctv = v)),
+      ],
+    );
+  }
+
+  Widget label(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+      ),
+    );
+  }
+
+  Widget switchTile(String label, bool value, Function(bool) onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
+          ),
+          Switch(value: value, onChanged: onChanged),
         ],
       ),
     );
@@ -649,7 +995,10 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
         _selectedCategoryId = result['id'];
         _selectedCategoryName = result['name'];
       });
-      widget.onCategorySelected(_selectedCategoryId ?? '', _selectedCategoryName ?? '');
+      widget.onCategorySelected(
+        _selectedCategoryId ?? '',
+        _selectedCategoryName ?? '',
+      );
     }
   }
 
@@ -678,6 +1027,100 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
             const Icon(Icons.arrow_drop_down),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class CounterInput extends StatelessWidget {
+  final String label;
+  final int value;
+  final Function(int) onChanged;
+
+  const CounterInput({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = TextEditingController(text: value.toString());
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Row(
+        children: [
+          // Label
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ),
+
+          // Minus button
+          _roundButton(
+            icon: Icons.remove,
+            onTap: () {
+              if (value > 0) onChanged(value - 1);
+            },
+          ),
+
+          const SizedBox(width: 10),
+
+          // Editable number box
+          SizedBox(
+            width: 70,
+            child: TextField(
+              controller: controller,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              decoration: BoxDecorationStyles.box(),
+              onChanged: (val) {
+                final num = int.tryParse(val) ?? value;
+                onChanged(num);
+              },
+            ),
+          ),
+
+          const SizedBox(width: 10),
+
+          // Plus button
+          _roundButton(icon: Icons.add, onTap: () => onChanged(value + 1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _roundButton({required IconData icon, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.BLACK_12,
+        ),
+        child: Icon(icon, size: 20, color: AppColors.BLACK),
+      ),
+    );
+  }
+}
+
+class BoxDecorationStyles {
+  static InputDecoration box() {
+    return InputDecoration(
+      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.GREY),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.THEME_COLOR),
       ),
     );
   }

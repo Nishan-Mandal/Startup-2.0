@@ -30,7 +30,7 @@ class CommonMethods {
     );
   }
 
-  static Future<String?> getUserName(String userId) async {
+  static Future<String?> getUserData(String userId, String fieldName) async {
     try {
       final doc =
           await FirebaseFirestore.instance
@@ -39,7 +39,7 @@ class CommonMethods {
               .get();
 
       if (doc.exists) {
-        return doc.data()?["name"] as String?;
+        return doc.data()?[fieldName] as String?;
       } else {
         debugPrint("User not found for userId: $userId");
         return null;
@@ -113,9 +113,7 @@ class CommonMethods {
       debugPrint("✅ dailyUsage reset for new day");
     } else {
       await userRef.update({
-        'dailyUsage': {
-          'lastActiveOn': FieldValue.serverTimestamp(),
-        },
+        'dailyUsage.lastActiveOn': FieldValue.serverTimestamp(),
       });
       debugPrint("✅ Continuing same-day session");
     }

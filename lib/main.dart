@@ -24,6 +24,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+  );
   await NotificationService.initialize();
 
   runApp(
@@ -44,71 +47,73 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AppAuthProvider>(context);
+    final firebaseUser = context.watch<AppAuthProvider>().firebaseUser;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'EasyFind',
+      title: 'Findon',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.THEME_COLOR),
       ),
       navigatorKey: navigatorKey,
       routes: {
         '/notifications': (context) => const NotificationsScreen(),
-        '/chatScreen': (context) => const BottomNavScreen(initialIndex: 3,),
+        '/chatScreen': (context) => const BottomNavScreen(initialIndex: 3),
+
+        // const ListingDetailScreen(listing: listing, similarListings: similarListings),
       },
 
       onGenerateRoute: (settings) {
-        if (settings.name == '/listingDetail') {
-          final args = settings.arguments as Map<String, dynamic>?;
-
-          if (args != null && args['listingId'] != null) {
-            final listingId = args['listingId'] as String;
-
-            // Fetch the listing from Firestore
-            return MaterialPageRoute(
-              builder:
-                  (context) => FutureBuilder<DocumentSnapshot>(
-                    future:
-                        FirebaseFirestore.instance
-                            .collection('listings')
-                            .doc(listingId)
-                            .get(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Scaffold(
-                          body: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-
-                      if (!snapshot.hasData || !snapshot.data!.exists) {
-                        return const Scaffold(
-                          body: Center(child: Text("Listing not found")),
-                        );
-                      }
-
-                      final listing = Listing.fromJson(
-                        snapshot.data!.data() as Map<String, dynamic>,
+        final uri = Uri.parse(settings.name ?? '');
+        if (uri.pathSegments.isNotEmpty &&
+            uri.pathSegments.length == 2 &&
+            uri.pathSegments.first == 'listing') {
+          final listingId = uri.pathSegments[1];
+          return MaterialPageRoute(
+            builder:
+                (context) => FutureBuilder<DocumentSnapshot>(
+                  future:
+                      FirebaseFirestore.instance
+                          .collection('listings')
+                          .doc(listingId)
+                          .get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Scaffold(
+                        body: Center(child: CircularProgressIndicator()),
                       );
+                    }
 
-                      // Pass the actual Listing object
-                      return ListingDetailScreen(
-                        listing: listing,
-                        similarListings: [],
+                    if (!snapshot.hasData || !snapshot.data!.exists) {
+                      return const Scaffold(
+                        body: Center(child: Text("Listing not found")),
                       );
-                    },
-                  ),
-            );
-          }
+                    }
+
+                    final listing = Listing.fromJson(
+                      snapshot.data!.data() as Map<String, dynamic>,
+                    );
+
+                    return ListingDetailScreen(
+                      listing: listing,
+                      similarListings: [],
+                    );
+                  },
+                ),
+          );
         }
 
         // fallback
         return MaterialPageRoute(
-          builder: (_) => AppAuthProvider.isAnonymousUser()?SignInScreen(skip: false):HomeScreen(),
+          builder:
+              (_) =>
+                  AppAuthProvider.isAnonymousUser()
+                      ? SignInScreen(skip: false)
+                      : HomeScreen(),
         );
       },
 
       home:
-          authProvider.user == null
+          firebaseUser == null
               ? const OnboardingScreen()
               : const BottomNavScreen(),
     );

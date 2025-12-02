@@ -62,9 +62,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _navigateToNextScreen() {
-    Navigator.pushReplacement(
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const SignInScreen(skip: true)),
+      (route) => false,
     );
   }
 

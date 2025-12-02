@@ -2,11 +2,9 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.RECEIVE_SMS"/>
-    <uses-permission android:name="android.permission.READ_SMS"/>
 
     <application
-        android:label="EasyFind"
+        android:label="Findon"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <meta-data
@@ -41,7 +39,7 @@
                 <!-- Match your web domain exactly -->
                 <data
                     android:scheme="https"
-                    android:host="startup20-5eaa7.web.app"
+                    android:host="startup20-5eaa7.firebaseapp.com"
                     android:pathPrefix="/listing" />
             </intent-filter>
         </activity>

@@ -4,6 +4,7 @@ import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
+import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/search_screen.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
@@ -132,11 +133,28 @@ class _ListingPageState extends State<ListingPage> {
               final listing = listings[index];
               return GestureDetector(
                 onTap: () {
-                  CommonMethods.navigateToListingDetailScreen(
-                    context,
-                    listing,
-                    listings,
-                  );
+                  if (widget.title == 'Pending Approvals') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => ListingDetailScreen(
+                              listing: listing,
+                              similarListings: listings,
+                            ),
+                      ),
+                    ).then((value) {
+                      // Reload your data here
+                      setState(() {});
+                    });
+                    ;
+                  } else {
+                    CommonMethods.navigateToListingDetailScreen(
+                      context,
+                      listing,
+                      listings,
+                    );
+                  }
                 },
                 child: CommonWidgets.listingCard(listing),
               );
@@ -204,7 +222,7 @@ class _ListingPageState extends State<ListingPage> {
                     builder:
                         (context) =>
                             AppAuthProvider.isAnonymousUser()
-                                ? SignInScreen(skip: false,)
+                                ? SignInScreen(skip: false)
                                 : AddListingScreen(),
                   ),
                 );

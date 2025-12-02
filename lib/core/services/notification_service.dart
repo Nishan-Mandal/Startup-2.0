@@ -144,37 +144,33 @@ class NotificationService {
   }
 
   /// Handle navigation when notification is tapped
-static void _handleNavigation(String? payload) {
-  if (payload == null || payload.isEmpty) return;
+  static void _handleNavigation(String? payload) {
+    if (payload == null || payload.isEmpty) return;
 
-  dynamic decoded;
-  try {
-    decoded = jsonDecode(payload); // 🔹 Convert string back to Map
-  } catch (e) {
-    debugPrint("Invalid JSON payload: $payload");
-    return;
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(payload); // 🔹 Convert string back to Map
+    } catch (e) {
+      debugPrint("Invalid JSON payload: $payload");
+      return;
+    }
+
+    String? route;
+    String? listingId;
+
+    if (decoded is Map<String, dynamic>) {
+      route = decoded['route'];
+      listingId = decoded['listingId'];
+    } else if (decoded is String) {
+      route = decoded;
+    }
+
+    if (route == '/listing' && listingId != null) {
+      navigatorKey.currentState?.pushNamed('/listing/$listingId');
+    } else if (route == '/chatScreen') {
+      navigatorKey.currentState?.pushNamed('/chatScreen');
+    } else if (route == '/notifications') {
+      navigatorKey.currentState?.pushNamed('/notifications');
+    }
   }
-
-  String? route;
-  String? listingId;
-
-  if (decoded is Map<String, dynamic>) {
-    route = decoded['route'];
-    listingId = decoded['listingId'];
-  } else if (decoded is String) {
-    route = decoded;
-  }
-
-  if (route == '/listingDetail' && listingId != null) {
-    navigatorKey.currentState?.pushNamed(
-      '/listingDetail',
-      arguments: {'listingId': listingId},
-    );
-  } else if (route == '/chatScreen') {
-    navigatorKey.currentState?.pushNamed('/chatScreen');
-  } else if (route == '/notifications') {
-    navigatorKey.currentState?.pushNamed('/notifications');
-  }
-}
-
 }

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Conversation {
   final String conversationId;
   final String type; // "direct" or "group"
+  final String initiatedBy;
   final String? groupName;
   final List<String> participantIds;
 
@@ -15,6 +16,7 @@ class Conversation {
   Conversation({
     required this.conversationId,
     required this.type,
+    required this.initiatedBy,
     this.groupName,
     required this.participantIds,
     required this.participants,
@@ -36,6 +38,7 @@ class Conversation {
     return Conversation(
       conversationId: doc.id,
       type: data['type'] ?? 'direct',
+      initiatedBy: data['initiatedBy'] ?? '',
       groupName: data['groupName'],
       participantIds: List<String>.from(data['participantIds'] ?? []),
       participants: parsedParticipants,
@@ -49,6 +52,7 @@ class Conversation {
   Map<String, dynamic> toJson() {
     return {
       "type": type,
+      "initiatedBy": initiatedBy,
       "groupName": groupName,
       "participantIds": participantIds,
       "participants": participants, // Firestore can store List<Map<String,String>>

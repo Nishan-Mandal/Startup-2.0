@@ -79,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final snapshot =
         await FirebaseFirestore.instance
             .collection("listings")
+            .where("verifiedBy", isNull: false)
             .orderBy("createdAt", descending: true)
             .limit(8)
             .get();
@@ -98,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
         await FirebaseFirestore.instance
             .collection("listings")
             .where("tags", arrayContains: tag)
+            .where("verifiedBy", isNull: false)
             .orderBy("createdAt", descending: true)
             .limit(8)
             .get();
@@ -131,6 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await FirebaseFirestore.instance
               .collection("listings")
               .where("category", whereIn: categories)
+              .where("verifiedBy", isNull: false)
               .get();
 
       listings =
@@ -349,12 +352,11 @@ class _HomeScreenState extends State<HomeScreen> {
               final route = promoBanners[index].route ?? '';
               if (route.isNotEmpty) {
                 // Check if the route is a listing detail route
-                if (route.startsWith('/listingDetail/')) {
+                if (route.startsWith('/listing/')) {
                   final listingId = route.split('/').last; // extract '001'
                   Navigator.pushNamed(
                     context,
-                    '/listingDetail',
-                    arguments: {'listingId': listingId},
+                    '/listing/$listingId',
                   );
                 } else {
                   // Navigate to any other route directly
@@ -451,6 +453,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           title: heading,
                           query: FirebaseFirestore.instance
                               .collection("listings")
+                              .where("verifiedBy", isNull: false)
                               .orderBy("createdAt", descending: true),
                         ),
                   ),
@@ -465,6 +468,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           query: FirebaseFirestore.instance
                               .collection("listings")
                               .where("tags", arrayContains: "recommended")
+                              .where("verifiedBy", isNull: false)
                               .orderBy("createdAt", descending: true),
                         ),
                   ),
@@ -479,6 +483,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           query: FirebaseFirestore.instance
                               .collection("listings")
                               .where("category", isEqualTo: heading)
+                              .where("verifiedBy", isNull: false)
                               .orderBy("createdAt", descending: true),
                         ),
                   ),
@@ -519,6 +524,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       query: FirebaseFirestore.instance
                           .collection("listings")
                           .where("category", isEqualTo: category.category)
+                          .where("verifiedBy", isNull: false)
                           .orderBy("createdAt", descending: true),
                     ),
               ),

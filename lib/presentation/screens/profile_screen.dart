@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/user_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
+import 'package:startup_20/presentation/screens/legal_page_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
@@ -55,6 +56,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => isLoading = false);
     }
   }
+
+  void _showLogoutConfirmation() {
+  showDialog(
+    context: context,
+    barrierDismissible: false, // user must choose Yes/No
+    builder: (context) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        title: const Text(
+          "Logout",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        content: const Text(
+          "Are you sure you want to logout?",
+          style: TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // close dialog
+
+              // Perform logout
+              final authProvider =
+                  Provider.of<AppAuthProvider>(context, listen: false);
+              authProvider.signOut();
+
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SignInScreen(skip: false),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.THEME_COLOR,
+            ),
+            child: const Text("Logout",style: TextStyle(color: AppColors.WHITE),),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -124,9 +178,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
-        
+
               const SizedBox(height: 12),
-        
+
               // 💰 Kudos Wallet
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -140,7 +194,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     const Text(
                       "Your Kudos",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     Row(
                       children: [
@@ -166,9 +223,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
-        
+
               const SizedBox(height: 20),
-        
+
               /// 🔹 My Activity Section
               _buildSection("My Activity", [
                 _buildTile(Icons.store, "My Listings", () {
@@ -180,7 +237,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             title: "My Listings",
                             query: FirebaseFirestore.instance
                                 .collection("listings")
-                                .where("addedBy", isEqualTo: currentUser!.userId)
+                                .where(
+                                  "addedBy",
+                                  isEqualTo: currentUser!.userId,
+                                )
                                 .orderBy("createdAt", descending: true),
                           ),
                     ),
@@ -188,46 +248,80 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }),
                 _buildTile(Icons.group_add, "My Referrals", () {}),
                 _buildTile(Icons.favorite, "Saved Services", () {
+                  if (favIds != null && favIds!.isNotEmpty) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => ListingPage(
+                              title: "Saved Services",
+                              query: FirebaseFirestore.instance
+                                  .collection("listings")
+                                  .where("listingId", whereIn: favIds)
+                                  .where("verifiedBy", isNull: false),
+                            ),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("You don't have any saved listing yet!"),
+                      ),
+                    );
+                  }
+                }),
+              ]),
+
+              /// 🔹 Rewards Section
+              _buildSection("Rewards & Kudos (coming soon..)", [
+                _buildTile(Icons.wallet_giftcard, "Kudos Wallet", () {}),
+                _buildTile(Icons.history, "Redeem History", () {}),
+              ]),
+
+              /// 🔹 Settings Section
+              _buildSection("Help & Information", [
+                _buildTile(Icons.info, "About Us", () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder:
-                          (context) => ListingPage(
-                            title: "Saved Services",
-                            query: FirebaseFirestore.instance
-                                .collection("listings")
-                                .where(FieldPath.documentId, whereIn: favIds),
-                          ),
+                      builder: (_) => LegalPageScreen(pageId: "about_us"),
+                    ),
+                  );
+                }),
+                _buildTile(Icons.lock, "Privacy Policy", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LegalPageScreen(pageId: "privacy_policy"),
+                    ),
+                  );
+                }),
+                _buildTile(Icons.language, "Terms of Service", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LegalPageScreen(pageId: "terms_service"),
+                    ),
+                  );
+                }),
+                _buildTile(Icons.help, "Help & Support", () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LegalPageScreen(pageId: "contact_us"),
                     ),
                   );
                 }),
               ]),
-        
-              /// 🔹 Rewards Section
-              _buildSection("Rewards & Kudos (coming soon)", [
-                _buildTile(Icons.wallet_giftcard, "Kudos Wallet", () {}),
-                _buildTile(Icons.history, "Redeem History", () {}),
-              ]),
-        
-              /// 🔹 Settings Section
-              _buildSection("Settings", [
-                _buildTile(Icons.lock, "Privacy & Security", () {}),
-                _buildTile(Icons.language, "Language & Region", () {}),
-                _buildTile(Icons.help, "Help & Support", () {}),
-                _buildTile(Icons.info, "About Us", () {}),
-              ]),
-        
+
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 child: ElevatedButton(
                   onPressed: () {
-                    authProvider.signOut();
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SignInScreen(skip: false),
-                      ),
-                    );
+                    _showLogoutConfirmation();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.WHITE,

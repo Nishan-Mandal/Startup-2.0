@@ -13,6 +13,8 @@ import 'package:startup_20/providers/auth_provider.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 import 'package:startup_20/providers/chat_provider.dart';
 import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
+import 'package:in_app_update/in_app_update.dart';
+
 
 class BottomNavScreen extends StatefulWidget {
   final int initialIndex;
@@ -31,6 +33,7 @@ class _BottomNavScreenState extends State<BottomNavScreen>
   @override
   void initState() {
     super.initState();
+    _checkForUpdate();
     WidgetsBinding.instance.addObserver(this);
     CommonMethods.onAppStart();
   }
@@ -50,6 +53,24 @@ class _BottomNavScreenState extends State<BottomNavScreen>
     WidgetsBinding.instance.removeObserver(this);
     CommonMethods.onAppClose();
     super.dispose();
+  }
+
+    Future<void> _checkForUpdate() async {
+    await InAppUpdate.checkForUpdate().then((info) {
+      setState(() {
+        if (info.updateAvailability == UpdateAvailability.updateAvailable) {
+          _update();
+        }
+      });
+    }).catchError((error) {
+    });
+  }
+
+  void _update() async {
+    await InAppUpdate.startFlexibleUpdate();
+    InAppUpdate.completeFlexibleUpdate().then((_) {}).catchError((error) {
+      debugPrint(error.toString());
+    });
   }
 
   @override

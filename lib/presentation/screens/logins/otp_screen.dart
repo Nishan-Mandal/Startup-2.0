@@ -50,7 +50,7 @@ class _OtpScreenState extends State<OtpScreen> {
       }
 
       _saveUserData(widget.userName, widget.phoneNumber);
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder:
@@ -59,6 +59,7 @@ class _OtpScreenState extends State<OtpScreen> {
                 child: const BottomNavScreen(),
               ),
         ),
+        (route) => false,
       );
     } catch (e) {
       ScaffoldMessenger.of(
@@ -186,7 +187,10 @@ class _OtpScreenState extends State<OtpScreen> {
                           )
                           : const Text(
                             "Verify OTP",
-                            style: TextStyle(fontSize: 18, color: AppColors.WHITE),
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: AppColors.WHITE,
+                            ),
                           ),
                 ),
               ),

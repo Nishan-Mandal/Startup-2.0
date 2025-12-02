@@ -9,6 +9,7 @@ import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_room_screen.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
+import 'package:startup_20/providers/auth_provider.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 import 'package:startup_20/providers/chat_provider.dart';
 
@@ -75,9 +76,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         .orderBy("lastMessageAt", descending: true)
                         .snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
+                  if (!snapshot.hasData || FirebaseAuth.instance.currentUser == null) {
                     return const Center(child: CircularProgressIndicator());
                   }
+                  
 
                   final allConversations =
                       snapshot.data!.docs
@@ -87,9 +89,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   // ✅ Filter only group chats OR direct chats containing this user
                   final conversations =
                       allConversations.where((conv) {
-                        if (conv.type == 'group')
+                        if (conv.type == 'group') {
                           return true; // include all groups
-                        if (conv.type == 'direct') {
+                        }
+                        if (conv.type == 'direct' || conv.type == 'support') {
                           return conv.participantIds.contains(
                             FirebaseAuth.instance.currentUser!.uid,
                           ); // include only if user is participant
@@ -105,7 +108,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   final groups =
                       conversations.where((c) => c.type == "group").toList();
                   final people =
-                      conversations.where((c) => c.type == "direct").toList();
+                      conversations
+                          .where(
+                            (c) => c.type == "direct" || c.type == "support",
+                          )
+                          .toList();
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,7 +225,10 @@ class _ChatScreenState extends State<ChatScreen> {
                               FirebaseAuth.instance.currentUser!.uid,
                             )) {
                               // pick the first participant that is not the current user
-                              otherUserName = participant.values.first;
+                              otherUserName =
+                                  p.type == 'support'
+                                      ? p.initiatedBy == FirebaseAuth.instance.currentUser?.displayName? 'Support 24/7':p.initiatedBy
+                                      : participant.values.first;
                               break;
                             }
                           }
@@ -228,15 +238,25 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                             leading: CircleAvatar(
                               radius: 22,
-                              backgroundColor: AppColors.THEME_COLOR,
-                              child: Text(
-                                CommonMethods.getInitials(otherUserName ?? 'U'),
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.WHITE,
-                                ),
-                              ),
+                              backgroundColor:
+                                  p.type == 'support'
+                                      ? AppColors.GREEN
+                                      : AppColors.THEME_COLOR,
+                              child:
+                                  p.type == 'support'
+                                      ? Image.asset(
+                                        'assets/images/FindonLogo.png',
+                                      )
+                                      : Text(
+                                        CommonMethods.getInitials(
+                                          otherUserName
+                                        ),
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.WHITE,
+                                        ),
+                                      ),
                             ),
                             title: Text(
                               otherUserName,

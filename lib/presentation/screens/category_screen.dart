@@ -168,6 +168,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                           query: FirebaseFirestore.instance
                               .collection("listings")
                               .where("category", isEqualTo: category.name)
+                              .where("verifiedBy", isNull: false)
                               .orderBy("createdAt", descending: true),
                         ),
                   ),

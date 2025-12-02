@@ -49,13 +49,12 @@ class NotificationsScreen extends StatelessWidget {
     if (route == null) return;
 
     switch (route) {
-      case '/listingDetail':
+      case '/listing':
         final listingId = data['listingId'];
         if (listingId != null) {
           Navigator.pushNamed(
             context,
-            route,
-            arguments: {'listingId': listingId},
+             '/listing/$listingId',
           );
         }
         break;

@@ -5,6 +5,7 @@ import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/bottom_nav_screen.dart';
+import 'package:startup_20/presentation/screens/legal_page_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
 import 'otp_screen.dart';
@@ -27,6 +28,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController phoneController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   bool isLoading = false;
+  bool acceptedTerms = true;
 
   @override
   void initState() {
@@ -52,6 +54,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (phoneController.text.isEmpty || phoneController.text.length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter a valid mobile number")),
+      );
+      return;
+    }
+
+    if (!acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please agree to Terms & Conditions")),
       );
       return;
     }
@@ -135,12 +144,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           child: Text("Skip"),
                         ),
                       ],
-                    ):SizedBox(),
+                    )
+                    : SizedBox(),
                 SizedBox(
                   height: 200,
                   width: 200,
                   child: Image.asset(
-                        'assets/images/EasyFindLogo.png',
+                    'assets/images/FindonLogo.png',
                     fit: BoxFit.cover,
                     width: double.infinity,
                     height: double.infinity,
@@ -188,7 +198,51 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     hintStyle: TextStyle(color: AppColors.BLACK_54),
                   ),
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 20),
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: acceptedTerms,
+                      activeColor: AppColors.THEME_COLOR,
+                      onChanged: (value) {
+                        setState(() => acceptedTerms = value ?? false);
+                      },
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        // Go to Terms & Conditions page
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (_) => LegalPageScreen(
+                                  pageId: "terms_of_service",
+                                ),
+                          ),
+                        );
+                      },
+                      child: RichText(
+                        text: TextSpan(
+                          text: "I agree to the ",
+                          style: const TextStyle(color: Colors.black87),
+                          children: [
+                            TextSpan(
+                              text: "Terms & Conditions",
+                              style: const TextStyle(
+                                color: AppColors.THEME_COLOR,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
 
                 // Send OTP Button
                 SizedBox(

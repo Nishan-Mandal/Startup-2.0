@@ -4,8 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/message_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
+import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
+import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
 import 'package:startup_20/providers/chat_provider.dart';
 
@@ -29,12 +32,11 @@ class ChatRoomScreen extends StatefulWidget {
 
 class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final TextEditingController _messageController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
   bool unreadSeparatorShown = false;
+  ChatMessage? _replyingTo;
 
   @override
   void dispose() {
-    // TODO: implement dispose
     super.dispose();
     _markMessagesAsRead();
   }
@@ -84,17 +86,26 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final messageRef = conversationRef.collection("messages").doc();
 
     // 🔹 Step 1: Add message to messages subcollection
+
     await messageRef.set({
       "messageId": messageRef.id,
       "senderId": user.uid,
       "senderName": user.displayName,
       "text": text,
-      "attachments": [],
+      "attachments": {},
       "status": "sent",
       "createdAt": FieldValue.serverTimestamp(),
+      "replyTo":
+          _replyingTo == null
+              ? null
+              : {
+                "messageId": _replyingTo!.id,
+                "senderName": _replyingTo!.senderName,
+                "text": _replyingTo!.text,
+              },
     });
 
-    final userName = await CommonMethods.getUserName(user.uid);
+    final userName = await CommonMethods.getUserData(user.uid, 'name');
 
     // 🔹 Step 2: Handle conversation update based on type and first-time message
     if (widget.type == 'direct') {
@@ -102,13 +113,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
       if (!conversationSnap.exists) {
         // 🆕 First message in direct chat → create conversation document
-        final otherUserName = await CommonMethods.getUserName(
+        final otherUserName = await CommonMethods.getUserData(
           widget.otherUserId,
+          'name',
         );
 
         await conversationRef.set({
           "conversationId": widget.conversationId,
           "type": "direct",
+          "initiatedBy": FirebaseAuth.instance.currentUser?.displayName??'',
           "participantIds": [user.uid, widget.otherUserId],
           "participants": [
             {user.uid: userName ?? "You"},
@@ -136,16 +149,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         "updatedAt": FieldValue.serverTimestamp(),
       });
     }
-
-    // 🔹 Step 3: Scroll to bottom
-    Future.delayed(const Duration(milliseconds: 200), () {
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-    });
+    if (mounted) {
+      setState(() {
+        _replyingTo = null;
+      });
+      setState(() => _replyingTo = null);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AppAuthProvider>(context);
+    final appUser = context.watch<AppAuthProvider>().appUser;
     return Scaffold(
       backgroundColor: AppColors.GREY_SHADE_50,
       appBar: AppBar(
@@ -166,7 +180,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       .collection("conversations")
                       .doc(widget.conversationId)
                       .collection("messages")
-                      .orderBy("createdAt")
+                      .orderBy("createdAt", descending: true)
                       .snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
@@ -178,22 +192,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         .map((doc) => ChatMessage.fromDoc(doc))
                         .toList();
 
-                // Scroll to the bottom after new messages load
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (_scrollController.hasClients) {
-                    _scrollController.jumpTo(
-                      _scrollController.position.maxScrollExtent+70,
-                    );
-                  }
-                });
-
                 return ListView.builder(
-                  controller: _scrollController,
+                  reverse: true,
                   itemCount: messages.length,
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemBuilder: (context, index) {
                     final m = messages[index];
-                    final isMe = m.senderId == authProvider.user!.uid;
+                    final isMe = m.senderId == appUser!.userId;
 
                     // Insert separator before the first unread message
                     if (!unreadSeparatorShown && m.status != "seen" && !isMe) {
@@ -215,7 +220,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         ],
                       );
                     }
-                    return _buildMessageBubble(m, isMe);
+                    return GestureDetector(
+                      onLongPress: () {
+                        setState(() {
+                          _replyingTo = m;
+                        });
+                      },
+                      child: _buildMessageBubble(m, isMe),
+                    );
                   },
                 );
               },
@@ -224,35 +236,77 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           // input field
           SafeArea(
             child: Container(
-              margin: const EdgeInsets.all(
-                8,
-              ), // optional spacing from screen edges
+              margin: const EdgeInsets.all(8),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                border: Border.all(
-                  color: AppColors.GREY_SHADE_300,
-                  width: 1,
-                ), // border color & width
-                borderRadius: BorderRadius.circular(20), // rounded corners
+                border: Border.all(color: AppColors.GREY_SHADE_300, width: 1),
+                borderRadius: BorderRadius.circular(20),
               ),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: const InputDecoration(
-                        hintText: "Type a message...",
-                        border: InputBorder.none, // remove default underline
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 0,
-                        ),
+                  // -------------------- REPLY BOX (WhatsApp style) --------------------
+                  if (_replyingTo != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Replying to ${_replyingTo!.senderName}",
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  _replyingTo!.text,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => setState(() => _replyingTo = null),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.send, color: AppColors.THEME_COLOR),
-                    onPressed: _sendMessage,
+
+                  // -------------------- TEXT FIELD + SEND ROW --------------------
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          decoration: const InputDecoration(
+                            hintText: "Type a message...",
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 0,
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.send,
+                          color: AppColors.THEME_COLOR,
+                        ),
+                        onPressed: _sendMessage,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -264,6 +318,16 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   Widget _buildMessageBubble(m, isMe) {
+    final appUser = context.watch<AppAuthProvider>().appUser;
+    // ---------------------- LISTING ATTACHMENT ----------------------
+    if (m.attachments != null &&
+        m.attachments.length > 0 &&
+        m.attachments!["type"] == "listing") {
+      final listingData = m.attachments!["data"];
+      final listing = Listing.fromJson(Map<String, dynamic>.from(listingData));
+
+      return _buildListingAttachmentBubble(listing, isMe, m);
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(
         vertical: 4,
@@ -280,7 +344,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               maxRadius: 15,
               backgroundColor: AppColors.GREY_SHADE_300,
               child: Text(
-                CommonMethods.getInitials(m.senderName ?? 'U'),
+                widget.type == 'support' && appUser?.role != 'admin'? 'S':CommonMethods.getInitials(m.senderName ?? 'U'),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -296,24 +360,105 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               crossAxisAlignment:
                   isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 5,
-                    horizontal: 10,
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.7,
                   ),
-                  decoration: BoxDecoration(
-                    color:
-                        isMe ? AppColors.THEME_COLOR : AppColors.GREY_SHADE_300,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    m.text,
-                    style: TextStyle(
-                      color: isMe ? AppColors.WHITE : AppColors.BLACK,
-                      fontSize: 15,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color:
+                          isMe
+                              ? AppColors.THEME_COLOR
+                              : AppColors.GREY_SHADE_300,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ---------------------- REPLY BOX ----------------------
+                        if (m.replyTo != null)
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            margin: const EdgeInsets.only(
+                              left: 6,
+                              right: 6,
+                              top: 6,
+                              bottom: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  isMe
+                                      ? AppColors.THEME_COLOR.withValues(
+                                        alpha: 1.1,
+                                      )
+                                      : AppColors.GREY_SHADE_300.withValues(
+                                        alpha: 1.1,
+                                      ),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border(
+                                left: BorderSide(
+                                  color:
+                                      isMe
+                                          ? AppColors.WHITE
+                                          : AppColors.THEME_COLOR,
+                                  width: 4,
+                                ),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  m.replyTo!.senderName,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isMe ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                                Text(
+                                  m.replyTo!.text,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isMe ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        // ---------------------- MAIN MESSAGE ----------------------
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 6,
+                            horizontal: 10,
+                          ),
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                isMe
+                                    ? AppColors.THEME_COLOR
+                                    : AppColors.GREY_SHADE_300,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            m.text,
+                            style: TextStyle(
+                              color: isMe ? AppColors.WHITE : AppColors.BLACK,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 2), // spacing between bubble and time
                 Text(
                   CommonMethods.formatMessageTime(m.createdAt),
@@ -323,6 +468,61 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildListingAttachmentBubble(
+    Listing listing,
+    bool isMe,
+    m,
+  ) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder:
+                (context) =>
+                    ListingDetailScreen(listing: listing, similarListings: []),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+
+          children: [
+            SizedBox(
+              height: 200,
+              width: 150,
+              child: CommonWidgets.listingCard(listing),
+            ),
+
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              decoration: BoxDecoration(
+                color: isMe ? AppColors.THEME_COLOR : AppColors.GREY_SHADE_300,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                m.text,
+                style: TextStyle(
+                  color: isMe ? AppColors.WHITE : AppColors.BLACK,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+             const SizedBox(height: 2),
+                Text(
+                  CommonMethods.formatMessageTime(m.createdAt),
+                  style: const TextStyle(fontSize: 10, color: AppColors.GREY),
+                ),
+          ],
+        ),
       ),
     );
   }
