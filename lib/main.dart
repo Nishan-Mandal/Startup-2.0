@@ -50,7 +50,7 @@ class MyApp extends StatelessWidget {
     final firebaseUser = context.watch<AppAuthProvider>().firebaseUser;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Findon',
+      title: 'NeedMet',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.THEME_COLOR),
       ),

@@ -150,7 +150,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   height: 200,
                   width: 200,
                   child: Image.asset(
-                    'assets/images/FindonLogo.png',
+                    'assets/images/companyLogo.png',
                     fit: BoxFit.cover,
                     width: double.infinity,
                     height: double.infinity,

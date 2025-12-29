@@ -9,13 +9,13 @@ class BottomNavProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void hideNavBar() {
-    isVisible = false;
-    notifyListeners();
-  }
+  // void hideNavBar() {
+  //   isVisible = false;
+  //   notifyListeners();
+  // }
 
-  void showNavBar() {
-    isVisible = true;
-    notifyListeners();
-  }
+  // void showNavBar() {
+  //   isVisible = true;
+  //   notifyListeners();
+  // }
 }

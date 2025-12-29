@@ -38,36 +38,14 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Listing> listings = [];
 
   int _currentBanner = 0;
-  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
-    _handleScroll();
     _homeFuture = fetchHomeData();
     _featuredListings = fetchFeaturedListings();
     _newAddedListings = fetchNewListings();
     _recommendedListings = fetchRecommendedListings();
-  }
-
-  void _handleScroll() {
-    _scrollController = ScrollController();
-
-    _scrollController.addListener(() {
-      if (_scrollController.position.userScrollDirection ==
-          ScrollDirection.reverse) {
-        Provider.of<BottomNavProvider>(context, listen: false).hideNavBar();
-      } else if (_scrollController.position.userScrollDirection ==
-          ScrollDirection.forward) {
-        Provider.of<BottomNavProvider>(context, listen: false).showNavBar();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   Future<List<Listing>> fetchFeaturedListings() async {
@@ -164,7 +142,6 @@ class _HomeScreenState extends State<HomeScreen> {
           final homeData = snapshot.data!;
 
           return CustomScrollView(
-            controller: _scrollController,
             slivers: [
               // 🔹 Top Bar + Location Selector
               CommonWidgets.topSection(context),

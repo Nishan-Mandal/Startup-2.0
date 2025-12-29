@@ -19,34 +19,12 @@ class CategoryScreen extends StatefulWidget {
 }
 
 class _CategoryScreenState extends State<CategoryScreen> {
-  late ScrollController _scrollController;
   late Future<List<Category>> _categoriesFuture; // cache the future
 
   @override
   void initState() {
     super.initState();
-    _handleScroll();
     _categoriesFuture = _fetchCategories();
-  }
-
-  void _handleScroll() {
-    _scrollController = ScrollController();
-
-    _scrollController.addListener(() {
-      if (_scrollController.position.userScrollDirection ==
-          ScrollDirection.reverse) {
-        Provider.of<BottomNavProvider>(context, listen: false).hideNavBar();
-      } else if (_scrollController.position.userScrollDirection ==
-          ScrollDirection.forward) {
-        Provider.of<BottomNavProvider>(context, listen: false).showNavBar();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   /// 🔹 Fetch categories from Firestore
@@ -62,7 +40,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
     return Scaffold(
       backgroundColor: AppColors.GREY_SHADE_50,
       body: CustomScrollView(
-        controller: _scrollController,
         slivers: [
           // 🔹 Top Bar + Location Selector
           CommonWidgets.topSection(context),

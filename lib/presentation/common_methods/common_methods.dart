@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
@@ -101,10 +102,12 @@ class CommonMethods {
 
     final usage = userSnap.data()?['dailyUsage'] ?? {};
     final lastActive = (usage['lastActiveOn'] as Timestamp?)?.toDate();
+    final packageInfo = await PackageInfo.fromPlatform();
 
     // If no usage or new day
     if (lastActive == null || lastActive.isBefore(today)) {
       await userRef.update({
+        'appVersion': packageInfo.version,
         'dailyUsage': {
           'lastActiveOn': FieldValue.serverTimestamp(),
           'totalMinutes': 0,
@@ -113,6 +116,7 @@ class CommonMethods {
       debugPrint("✅ dailyUsage reset for new day");
     } else {
       await userRef.update({
+        'appVersion': packageInfo.version,
         'dailyUsage.lastActiveOn': FieldValue.serverTimestamp(),
       });
       debugPrint("✅ Continuing same-day session");

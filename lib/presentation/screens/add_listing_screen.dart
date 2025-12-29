@@ -34,15 +34,15 @@ class _AddListingScreenState extends State<AddListingScreen> {
   final TextEditingController _ownerNameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _sinceController = TextEditingController();
-  final TextEditingController _availabilityController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _websiteController = TextEditingController();
+  final TextEditingController _whatsappController = TextEditingController();
   final TextEditingController _instagramController = TextEditingController();
   final TextEditingController _facebookController = TextEditingController();
   final TextEditingController _linkedInController = TextEditingController();
 
-  bool acceptOnlinePayment = false;
+  bool acceptOnlinePayment = true;
 
   late double _latitude;
   late double _longitude;
@@ -53,9 +53,23 @@ class _AddListingScreenState extends State<AddListingScreen> {
   final List<File> _images = [];
   List<ImageFile> _remoteImages = [];
 
+  bool _addOpenHours = false;
+  Map<String, OpenHours> _openHours = {
+    "Monday": OpenHours(open: "10:00 AM", close: "10:00 PM", closed: false),
+    "Tuesday": OpenHours(open: "10:00 AM", close: "10:00 PM", closed: false),
+    "Wednesday": OpenHours(open: "10:00 AM", close: "10:00 PM", closed: false),
+    "Thursday": OpenHours(open: "10:00 AM", close: "10:00 PM", closed: false),
+    "Friday": OpenHours(open: "10:00 AM", close: "10:00 PM", closed: false),
+    "Saturday": OpenHours(open: "10:00 AM", close: "10:00 PM", closed: false),
+    "Sunday": OpenHours(open: "10:00 AM", close: "10:00 PM", closed: false),
+  };
+
   // Sub Category Multi-select
   List<String> subCategories = ["Office", "Bachelors", "MES", "Family"];
   List<String> selectedSubCategories = [];
+
+  List<String> appartmentTypes = ["1 RK", "1 BHK", "2 BHK", "3 BHK"];
+  String? selectedAppartmentType;
 
   // Property Type Inputs
   int roomNumber = 0;
@@ -72,6 +86,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
   bool waterCharge = false;
   bool otherCharge = false;
   bool cctv = false;
+  bool diningRoom = false;
 
   @override
   void initState() {
@@ -81,9 +96,6 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
 
   void _prePopulateData() {
-    _availabilityController.text =
-        "Mon: [10 AM – 9 PM]\nTue: [10 AM – 9 PM]\nWed: [Closed]\nThu: [10 AM – 9 PM]\nFri: [10 AM – 9 PM]\nSat: [10 AM – 9 PM]\nSun: [10 AM – 9 PM]";
-
     if (isEditing) {
       final listing = widget.existingListing!;
 
@@ -97,20 +109,24 @@ class _AddListingScreenState extends State<AddListingScreen> {
       _selectedCategoryId = listing.categoryId;
       _selectedCategoryName = listing.category;
 
-      _sinceController.text = listing.details['Since'] ?? '';
-      _availabilityController.text =
-          listing.details['Availability'] ?? _availabilityController.text;
+      _sinceController.text = listing.since.toString();
       _emailController.text = listing.details['Email'] ?? '';
-      _websiteController.text = listing.details['Website'] ?? '';
-      _instagramController.text = listing.details['Instagram'] ?? '';
-      _facebookController.text = listing.details['Facebook'] ?? '';
-      _linkedInController.text = listing.details['LinkedIn'] ?? '';
+      _websiteController.text = listing.social['Website'] ?? '';
+      _whatsappController.text = listing.social['WhatsApp'] ?? '';
+      _instagramController.text = listing.social['Instagram'] ?? '';
+      _facebookController.text = listing.social['Facebook'] ?? '';
+      _linkedInController.text = listing.social['LinkedIn'] ?? '';
       acceptOnlinePayment =
           listing.details['Accept Online Payments'] != null
               ? listing.details['Accept Online Payments'] == 'Yes'
                   ? true
                   : false
               : false;
+
+      if (listing.openHours.isNotEmpty) {
+        _openHours = listing.openHours;
+        _addOpenHours = true;
+      }
 
       //Room Rent
       final availableFor = listing.details['Available For'];
@@ -131,6 +147,8 @@ class _AddListingScreenState extends State<AddListingScreen> {
       } else {
         selectedSubCategories = [];
       }
+
+      selectedAppartmentType = listing.details['Appartment Type'];
 
       roomNumber = listing.details['Room (s)'] ?? 0;
       bathroomNumber = listing.details['Bathroom (s)'] ?? 0;
@@ -171,6 +189,13 @@ class _AddListingScreenState extends State<AddListingScreen> {
       cctv =
           listing.details['CCTV'] != null
               ? listing.details['CCTV'] == 'Yes'
+                  ? true
+                  : false
+              : false;
+
+      diningRoom =
+          listing.details['Dining Room'] != null
+              ? listing.details['Dining Room'] == 'Yes'
                   ? true
                   : false
               : false;
@@ -217,24 +242,6 @@ class _AddListingScreenState extends State<AddListingScreen> {
           _selectedCategoryId != null ||
           _images.isNotEmpty;
     }
-
-    // If EDITING → compare with old values
-    // if (_nameController.text.trim() != listing.name) return true;
-    // if (_addressController.text.trim() != listing.address) return true;
-    // if (_descriptionController.text.trim() != listing.description) return true;
-    // if (_phoneController.text.trim() != listing.phone) return true;
-    // if (_ownerNameController.text.trim() != listing.ownerName) return true;
-
-    // if (_selectedCategoryId != listing.categoryId) return true;
-    // if (_selectedCategoryName != listing.category) return true;
-
-    // if (_latitude != listing.geo.lat) return true;
-    // if (_longitude != listing.geo.lng) return true;
-
-    // // Images: changed if new images added or removed
-    // if (_images.isNotEmpty) return true;
-    // if (_remoteImages.length != listing.images.length) return true;
-
     return true;
   }
 
@@ -260,14 +267,17 @@ class _AddListingScreenState extends State<AddListingScreen> {
     }
 
     Map<String, dynamic> details = {};
+    Map<String, String> social = {};
 
     if (_selectedCategoryName == 'Room Rent') {
       details = {
+        'Appartment Type': selectedAppartmentType,
         'Monthly Rent': monthlyRent,
         'Available For': selectedSubCategories.join(", "),
         'Room (s)': roomNumber,
         'Bathroom (s)': bathroomNumber,
         'Balcony (s)': balcony,
+        'Dining Room': diningRoom ? 'Yes' : 'No',
         'Floor Number': floorNumber,
         'Two Wheeler Parking': twoWheelerparking ? 'Yes' : 'No',
         'Four Wheeler Parking': fourWheelerparking ? 'Yes' : 'No',
@@ -279,18 +289,18 @@ class _AddListingScreenState extends State<AddListingScreen> {
       };
     }
 
-    addIfValid(details, 'Availability', _availabilityController.text.trim());
     addIfValid(details, 'Email', _emailController.text.trim());
-    addIfValid(details, 'Website', _websiteController.text.trim());
-    addIfValid(details, 'Instagram', _instagramController.text.trim());
-    addIfValid(details, 'Facebook', _facebookController.text.trim());
-    addIfValid(details, 'LinkedIn', _linkedInController.text.trim());
-    addIfValid(details, 'Since', _sinceController.text.trim());
-    addIfValid(
-      details,
-      'Accept Online Payments',
-      acceptOnlinePayment ? 'Yes' : 'No',
-    );
+
+    if (!acceptOnlinePayment) {
+      addIfValid(details, 'Accept Online Payments', 'No');
+    }
+
+    //Social Media
+    addIfValid(social, 'Website', _websiteController.text.trim());
+    addIfValid(social, 'WhatsApp', _whatsappController.text.trim());
+    addIfValid(social, 'Instagram', _instagramController.text.trim());
+    addIfValid(social, 'Facebook', _facebookController.text.trim());
+    addIfValid(social, 'LinkedIn', _linkedInController.text.trim());
 
     final draftListing = Listing(
       listingId: widget.existingListing?.listingId ?? "draft",
@@ -320,7 +330,16 @@ class _AddListingScreenState extends State<AddListingScreen> {
       localImages: _images, // files selected now
 
       reviews: widget.existingListing?.reviews ?? 0,
+      ratingCount: widget.existingListing?.ratingCount ?? 0,
       rating: widget.existingListing?.rating ?? 0,
+
+      since: widget.existingListing?.since ?? 2025,
+      likes: widget.existingListing?.likes ?? 0,
+      views: widget.existingListing?.views ?? 0,
+      social: widget.existingListing?.social ?? social,
+      ratingStats: widget.existingListing?.ratingStats ?? {},
+      factorAvgRatings: widget.existingListing?.factorAvgRatings ?? {},
+      openHours: _addOpenHours? _openHours:{},
     );
 
     Navigator.push(
@@ -569,6 +588,38 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Category Dropdown
+                  FutureBuilder<List<models.Category>>(
+                    future: _categoriesFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (snapshot.hasError) {
+                        return Text("Error: ${snapshot.error}");
+                      }
+
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return const Text("No categories found");
+                      }
+
+                      final categories = snapshot.data!;
+
+                      return SearchableDropdown(
+                        categories: categories,
+                        onCategorySelected: (String id, String name) {
+                          setState(() {
+                            _selectedCategoryId = id;
+                            _selectedCategoryName = name;
+                          });
+                        },
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
                   // Shop/Service Name
                   TextFormField(
                     controller: _nameController,
@@ -595,6 +646,18 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
                       labelText: "*Phone",
+                      border: OutlineInputBorder(),
+                      prefixText: "+91 ",
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Whatsapp
+                  TextFormField(
+                    controller: _whatsappController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: "WhatsApp",
                       border: OutlineInputBorder(),
                       prefixText: "+91 ",
                     ),
@@ -636,14 +699,29 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
                   const SizedBox(height: 16),
 
-                  TextFormField(
-                    controller: _availabilityController,
-                    maxLines: 7,
-                    decoration: const InputDecoration(
-                      labelText: "Availability",
-                      border: OutlineInputBorder(),
-                    ),
+                  // TextFormField(
+                  //   controller: _availabilityController,
+                  //   maxLines: 7,
+                  //   decoration: const InputDecoration(
+                  //     labelText: "Availability",
+                  //     border: OutlineInputBorder(),
+                  //   ),
+                  // ),
+                  CheckboxListTile(
+                    value: _addOpenHours,
+                    title: const Text("Add Open Hours"),
+                    onChanged: (value) {
+                      setState(() {
+                        _addOpenHours = value ?? false;
+                      });
+                    },
                   ),
+
+                  if (_addOpenHours) ...[
+                    const SizedBox(height: 12),
+                    _buildOpenHoursTable(),
+                  ],
+
                   const SizedBox(height: 16),
 
                   TextFormField(
@@ -690,38 +768,6 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Category Dropdown
-                  FutureBuilder<List<models.Category>>(
-                    future: _categoriesFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      if (snapshot.hasError) {
-                        return Text("Error: ${snapshot.error}");
-                      }
-
-                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return const Text("No categories found");
-                      }
-
-                      final categories = snapshot.data!;
-
-                      return SearchableDropdown(
-                        categories: categories,
-                        onCategorySelected: (String id, String name) {
-                          setState(() {
-                            _selectedCategoryId = id;
-                            _selectedCategoryName = name;
-                          });
-                        },
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
                   // Description
                   TextFormField(
                     controller: _descriptionController,
@@ -732,8 +778,6 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     ),
                   ),
 
-                  if (_selectedCategoryName == 'Room Rent') _roomRentInfo(),
-
                   SizedBox(height: 16),
                   switchTile(
                     "Accept Online Payments",
@@ -741,6 +785,8 @@ class _AddListingScreenState extends State<AddListingScreen> {
                     (v) => setState(() => acceptOnlinePayment = v),
                   ),
                   const SizedBox(height: 16),
+
+                  if (_selectedCategoryName == 'Room Rent') _roomRentInfo(),
 
                   // Submit Button
                   ElevatedButton(
@@ -779,7 +825,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
         const SizedBox(height: 25),
 
         // Sub Category (Multi-select)
-        label("Available For:"),
+        label("Available For"),
 
         Wrap(
           spacing: 10,
@@ -797,6 +843,27 @@ class _AddListingScreenState extends State<AddListingScreen> {
                       } else {
                         selectedSubCategories.add(cat);
                       }
+                    });
+                  },
+                );
+              }).toList(),
+        ),
+        const SizedBox(height: 25),
+        label("Appartment Type"),
+
+        Wrap(
+          spacing: 10,
+          children:
+              appartmentTypes.map((cat) {
+                final isSelected = selectedAppartmentType == cat;
+
+                return ChoiceChip(
+                  label: Text(cat),
+                  selected: isSelected,
+                  selectedColor: Colors.blue.shade200,
+                  onSelected: (selected) {
+                    setState(() {
+                      selectedAppartmentType = selected ? cat : null;
                     });
                   },
                 );
@@ -839,6 +906,12 @@ class _AddListingScreenState extends State<AddListingScreen> {
           label: "Electric Charge",
           value: electricCharge,
           onChanged: (val) => setState(() => electricCharge = val),
+        ),
+
+        switchTile(
+          "Dining Room",
+          diningRoom,
+          (v) => setState(() => diningRoom = v),
         ),
 
         switchTile(
@@ -889,6 +962,134 @@ class _AddListingScreenState extends State<AddListingScreen> {
           Switch(value: value, onChanged: onChanged),
         ],
       ),
+    );
+  }
+
+  Widget _buildOpenHoursTable() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Open Hours",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+
+        Table(
+          border: TableBorder.all(color: Colors.grey.shade300),
+          columnWidths: const {
+            0: FlexColumnWidth(2),
+            1: FlexColumnWidth(2),
+            2: FlexColumnWidth(2),
+            3: FlexColumnWidth(1.5),
+          },
+          children: [
+            /// Header
+            const TableRow(
+              decoration: BoxDecoration(color: Color(0xFFF5F5F5)),
+              children: [
+                Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    "Day",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    "Open",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    "Close",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    "Closed",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+
+            /// Rows
+            ..._openHours.entries.map((entry) {
+              final day = entry.key;
+              final hours = entry.value;
+
+              return TableRow(
+                children: [
+                  Padding(padding: const EdgeInsets.all(8), child: Text(day)),
+
+                  /// Open Time
+                  Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: TextFormField(
+                      initialValue: hours.open,
+                      enabled: !hours.closed,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        _openHours[day] = OpenHours(
+                          open: value,
+                          close: hours.close,
+                          closed: hours.closed,
+                        );
+                      },
+                    ),
+                  ),
+
+                  /// Close Time
+                  Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: TextFormField(
+                      initialValue: hours.close,
+                      enabled: !hours.closed,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        _openHours[day] = OpenHours(
+                          open: hours.open,
+                          close: value,
+                          closed: hours.closed,
+                        );
+                      },
+                    ),
+                  ),
+
+                  /// Closed Checkbox
+                  Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Checkbox(
+                      value: hours.closed,
+                      onChanged: (val) {
+                        setState(() {
+                          _openHours[day] = OpenHours(
+                            open: hours.open,
+                            close: hours.close,
+                            closed: val ?? false,
+                          );
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1032,7 +1233,7 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
   }
 }
 
-class CounterInput extends StatelessWidget {
+class CounterInput extends StatefulWidget {
   final String label;
   final int value;
   final Function(int) onChanged;
@@ -1045,32 +1246,56 @@ class CounterInput extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final controller = TextEditingController(text: value.toString());
+  State<CounterInput> createState() => _CounterInputState();
+}
 
+class _CounterInputState extends State<CounterInput> {
+  late TextEditingController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController(text: widget.value.toString());
+  }
+
+  @override
+  void didUpdateWidget(CounterInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update text only when external value changes
+    if (oldWidget.value != widget.value &&
+        controller.text != widget.value.toString()) {
+      controller.text = widget.value.toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
       child: Row(
         children: [
-          // Label
           Expanded(
             child: Text(
-              label,
+              widget.label,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),
 
-          // Minus button
           _roundButton(
             icon: Icons.remove,
             onTap: () {
-              if (value > 0) onChanged(value - 1);
+              if (widget.value > 0) widget.onChanged(widget.value - 1);
             },
           ),
 
           const SizedBox(width: 10),
 
-          // Editable number box
           SizedBox(
             width: 70,
             child: TextField(
@@ -1079,16 +1304,18 @@ class CounterInput extends StatelessWidget {
               keyboardType: TextInputType.number,
               decoration: BoxDecorationStyles.box(),
               onChanged: (val) {
-                final num = int.tryParse(val) ?? value;
-                onChanged(num);
+                final parsed = int.tryParse(val);
+                if (parsed != null) widget.onChanged(parsed);
               },
             ),
           ),
 
           const SizedBox(width: 10),
 
-          // Plus button
-          _roundButton(icon: Icons.add, onTap: () => onChanged(value + 1)),
+          _roundButton(
+            icon: Icons.add,
+            onTap: () => widget.onChanged(widget.value + 1),
+          ),
         ],
       ),
     );

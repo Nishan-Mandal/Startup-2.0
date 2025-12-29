@@ -44,7 +44,7 @@ class CommonWidgets {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    "Findon 👀",
+                    "NeedMet 👀",
                     style: TextStyle(
                       fontSize: 23,
                       fontWeight: FontWeight.bold,

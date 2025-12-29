@@ -21,40 +21,11 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  late ScrollController _scrollController;
-
-  @override
-  void initState() {
-    super.initState();
-    _handleScroll();
-  }
-
-  void _handleScroll() {
-    _scrollController = ScrollController();
-
-    _scrollController.addListener(() {
-      if (_scrollController.position.userScrollDirection ==
-          ScrollDirection.reverse) {
-        Provider.of<BottomNavProvider>(context, listen: false).hideNavBar();
-      } else if (_scrollController.position.userScrollDirection ==
-          ScrollDirection.forward) {
-        Provider.of<BottomNavProvider>(context, listen: false).showNavBar();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.WHITE,
       body: CustomScrollView(
-        controller: _scrollController,
         slivers: [
           // 🔹 Top Bar + Location Selector
           CommonWidgets.topSection(context),
@@ -76,10 +47,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         .orderBy("lastMessageAt", descending: true)
                         .snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData || FirebaseAuth.instance.currentUser == null) {
+                  if (!snapshot.hasData ||
+                      FirebaseAuth.instance.currentUser == null) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  
 
                   final allConversations =
                       snapshot.data!.docs
@@ -227,12 +198,19 @@ class _ChatScreenState extends State<ChatScreen> {
                               // pick the first participant that is not the current user
                               otherUserName =
                                   p.type == 'support'
-                                      ? p.initiatedBy == FirebaseAuth.instance.currentUser?.displayName? 'Support 24/7':p.initiatedBy
+                                      ? p.initiatedBy ==
+                                              FirebaseAuth
+                                                  .instance
+                                                  .currentUser
+                                                  ?.displayName
+                                          ? 'Support 24/7'
+                                          : p.initiatedBy
                                       : participant.values.first;
                               break;
                             }
                           }
                           return ListTile(
+                            // splashColor: Colors.transparent,
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 0,
                             ),
@@ -240,16 +218,16 @@ class _ChatScreenState extends State<ChatScreen> {
                               radius: 22,
                               backgroundColor:
                                   p.type == 'support'
-                                      ? AppColors.GREEN
+                                      ? AppColors.WHITE
                                       : AppColors.THEME_COLOR,
                               child:
                                   p.type == 'support'
                                       ? Image.asset(
-                                        'assets/images/FindonLogo.png',
+                                        'assets/images/companyLogo.png',
                                       )
                                       : Text(
                                         CommonMethods.getInitials(
-                                          otherUserName
+                                          otherUserName,
                                         ),
                                         style: const TextStyle(
                                           fontSize: 15,

@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
 
     <application
-        android:label="Findon"
+        android:label="NeedMet"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <meta-data
@@ -39,7 +39,7 @@
                 <!-- Match your web domain exactly -->
                 <data
                     android:scheme="https"
-                    android:host="startup20-5eaa7.firebaseapp.com"
+                    android:host="needmet.in"
                     android:pathPrefix="/listing" />
             </intent-filter>
         </activity>
