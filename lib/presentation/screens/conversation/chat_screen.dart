@@ -1,17 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/conversation_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_room_screen.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
-import 'package:startup_20/providers/auth_provider.dart';
-import 'package:startup_20/providers/bottom_nav_provider.dart';
-import 'package:startup_20/providers/chat_provider.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
