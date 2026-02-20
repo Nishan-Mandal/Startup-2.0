@@ -1,18 +1,15 @@
-import 'dart:math';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/home_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
+import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
-import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/presentation/screens/search_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
@@ -27,58 +24,53 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<HomeModel> _homeFuture;
   late Future<List<Listing>> _featuredListings;
+  late Future<List<Listing>> _newAddedListings;
   late Future<List<Listing>> _recommendedListings;
   List<Listing> listings = [];
 
   int _currentBanner = 0;
-  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
-    _handleScroll();
     _homeFuture = fetchHomeData();
     _featuredListings = fetchFeaturedListings();
+    _newAddedListings = fetchNewListings();
     _recommendedListings = fetchRecommendedListings();
   }
 
-  void _handleScroll() {
-    _scrollController = ScrollController();
-
-    _scrollController.addListener(() {
-      if (_scrollController.position.userScrollDirection ==
-          ScrollDirection.reverse) {
-        Provider.of<BottomNavProvider>(context, listen: false).hideNavBar();
-      } else if (_scrollController.position.userScrollDirection ==
-          ScrollDirection.forward) {
-        Provider.of<BottomNavProvider>(context, listen: false).showNavBar();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
   Future<List<Listing>> fetchFeaturedListings() async {
+    Future<List<Listing>> featuredListings = fetchListingsByTag("featured");
+    return featuredListings;
+  }
+
+  Future<List<Listing>> fetchNewListings() async {
     final snapshot =
         await FirebaseFirestore.instance
             .collection("listings")
-            .where("tags", arrayContains: "featured")
-            .orderBy("createdAt", descending: true) // optional, latest first
+            .where("verifiedBy", isNull: false)
+            .orderBy("createdAt", descending: true)
+            .limit(8)
             .get();
 
     return snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
   }
 
   Future<List<Listing>> fetchRecommendedListings() async {
+    Future<List<Listing>> recommendedListings = fetchListingsByTag(
+      "recommended",
+    );
+    return recommendedListings;
+  }
+
+  Future<List<Listing>> fetchListingsByTag(String tag) async {
     final snapshot =
         await FirebaseFirestore.instance
             .collection("listings")
-            .where("tags", arrayContains: "recommended")
-            .orderBy("createdAt", descending: true) // optional, latest first
+            .where("tags", arrayContains: tag)
+            .where("verifiedBy", isNull: false)
+            .orderBy("createdAt", descending: true)
+            .limit(8)
             .get();
 
     return snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
@@ -110,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await FirebaseFirestore.instance
               .collection("listings")
               .where("category", whereIn: categories)
+              .where("verifiedBy", isNull: false)
               .get();
 
       listings =
@@ -119,70 +112,65 @@ class _HomeScreenState extends State<HomeScreen> {
     return HomeModel.fromJson(doc.data());
   }
 
-  /// Sample Data Generator
-  Future<void> generateSampleListings() async {
-    final firestore = FirebaseFirestore.instance;
-    final random = Random();
-    // 🔹 Define 10 categories
-    final categories = [
-      "Restaurant",
-      "Electrician",
-      "Plumber",
-      "Grocery",
-      "Doctor",
-      "Salon",
-      "Gym",
-      "Pharmacy",
-      "Cafe",
-      "Mechanic",
-    ];
+  List<Listing> listingsByCategory(String category) {
+    return listings.where((l) => l.category == category).toList()
+      ..sort((a, b) => b.rating.compareTo(a.rating));
+  }
 
-    // 🔹 For each category, create 10 sample listings
-    for (final category in categories) {
-      for (int i = 1; i <= 10; i++) {
-        final docRef = firestore.collection("listings").doc();
+  List<Widget> categorySectionSlivers(HomeModel homeData, int index) {
+    final categoryName = homeData.listings[index];
+    debugPrint(categoryName);
+    final categoryListings = listingsByCategory(categoryName);
 
-        final data = {
-          "listingId": docRef.id,
-          "contributionId": "contrib_${category}_$i",
-          "name": "$category Service $i",
-          "address": "123 Main Street, City $i",
-          "description": "Best $category service in town #$i",
-          "geo": {"lat": 37.7749 + (i * 0.001), "lng": -122.4194 + (i * 0.001)},
-          "phone": "+91 98765432$i",
-          "category": category,
-          "tags": ["$category", "Service", "Demo"],
-          "addedBy": "system_admin",
-          "isClaimed": false,
-          "ownerId": null,
-          "claimStatus": "unclaimed",
-          "verifiedBy": null,
-          "createdAt": FieldValue.serverTimestamp(),
-          "updatedAt": FieldValue.serverTimestamp(),
-          "reviews": random.nextInt(500),
-          "rating": double.parse(
-            (1 + random.nextDouble() * 4).toStringAsFixed(
-              1,
-            ), // ensures 1.0 → 5.0 with 1 decimal
+    if (categoryListings.isEmpty) return [];
+
+    return [
+      // 🔹 Banner
+      sectionBanner(homeData, index),
+
+      // 🔹 Category Heading
+      SliverToBoxAdapter(child: _headings(categoryName)),
+      const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+      // 🔹 Listings Grid
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 15),
+        sliver: SliverGrid(
+          delegate: SliverChildBuilderDelegate((context, i) {
+            final listing = categoryListings[i];
+            return GestureDetector(
+              onTap: () {
+                CommonMethods.navigateToListingDetailScreen(
+                  context,
+                  listing,
+                  categoryListings,
+                );
+              },
+              child: CommonWidgets.listingCard(listing),
+            );
+          }, childCount: categoryListings.take(6).length),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 3 / 3.8,
           ),
-          "images": [
-            {
-              "fileId": "file_${category}_$i-1",
-              "fullUrl": "https://picsum.photos/200",
-              "thumbUrl": "https://picsum.photos/200",
-            },
-            {
-              "fileId": "file_${category}_$i-2",
-              "fullUrl": "https://picsum.photos/200",
-              "thumbUrl": "https://picsum.photos/200",
-            },
-          ],
-        };
+        ),
+      ),
+    ];
+  }
 
-        // 🔹 Write to Firestore
-        await docRef.set(data);
-      }
+  SliverToBoxAdapter sectionBanner(HomeModel homeData, int index) {
+    if (homeData.banners.length <= index) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: _bannerData(homeData.banners[index].imageUrl),
+      ),
+    );
   }
 
   @override
@@ -206,136 +194,79 @@ class _HomeScreenState extends State<HomeScreen> {
           final homeData = snapshot.data!;
 
           return CustomScrollView(
-            controller: _scrollController,
             slivers: [
-              // 🔹 Top Bar + Location Selector
               CommonWidgets.topSection(context),
 
-              // 🔹 Pinned Search Bar
               SliverPersistentHeader(
                 pinned: true,
                 delegate: SearchBarHeader(child: CommonWidgets.searchBar()),
               ),
 
-              // 🔹 Scrollable Content
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    _promoBanner(homeData.promoBanners),
-                    const SizedBox(height: 8),
-                    _dotsIndicator(homeData.promoBanners),
-                    const SizedBox(height: 20),
-                    _headings('Popular Categories'),
-                    const SizedBox(height: 12),
-                    _categoriesTab(homeData.categories),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: EdgeInsets.only(bottom: 30, top: 20),
-                      color: AppColors.GREY_SHADE_300,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          _featuredAdsHeading(),
-                          const SizedBox(height: 12),
-                          FutureBuilder<List<Listing>>(
-                            future: _featuredListings,
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
-                              if (snapshot.hasError) {
-                                return Text("Error: ${snapshot.error}");
-                              }
-                              final featuredListings = snapshot.data ?? [];
+              SliverToBoxAdapter(child: const SizedBox(height: 10)),
 
-                              if (featuredListings.isEmpty) {
-                                return const Text(
-                                  "No featured listings available",
-                                );
-                              }
+              /// Promo banner
+              SliverToBoxAdapter(child: _promoBanner(homeData.promoBanners)),
 
-                              return _featuredAds(featuredListings);
-                            },
-                          ),
-                        ],
+              SliverToBoxAdapter(child: const SizedBox(height: 8)),
+
+              SliverToBoxAdapter(child: _dotsIndicator(homeData.promoBanners)),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+
+              SliverToBoxAdapter(child: _headings('Popular Categories')),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 12)),
+
+              ///SliverGrid directly (NO wrapper widget)
+              _categoriesTab(homeData.categories),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+
+              /// Featured ads section
+              SliverToBoxAdapter(
+                child: Container(
+                  padding: const EdgeInsets.only(bottom: 30, top: 20),
+                  color: AppColors.BLACK_12,
+                  child: Column(
+                    children: [
+                      _featuredAdsHeading(),
+                      const SizedBox(height: 12),
+                      FutureBuilder<List<Listing>>(
+                        future: _featuredListings,
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const CircularProgressIndicator();
+                          }
+                          if (snapshot.data!.isEmpty) {
+                            return const Text("No featured listings available");
+                          }
+
+                          return _featuredAds(snapshot.data!);
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    _headings('Recommended'),
-                    const SizedBox(height: 20),
-                    FutureBuilder<List<Listing>>(
-                      future: _recommendedListings,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: 6,
-                            padding: const EdgeInsets.symmetric(horizontal: 15),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                  childAspectRatio: 3 / 3.8,
-                                ),
-                            itemBuilder:
-                                (context, index) =>
-                                    CommonWidgets.shimmerlistingCard(),
-                          );
-                        }
-                        if (snapshot.hasError) {
-                          return Text("Error: ${snapshot.error}");
-                        }
-
-                        final featuredListings = snapshot.data ?? [];
-
-                        if (featuredListings.isEmpty) {
-                          return const Text(
-                            "No recommended listings available",
-                          );
-                        }
-
-                        return _listingsData(featuredListings);
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    _bannerData(homeData.banners[0]),
-
-                    for (
-                      int index = 0;
-                      index < homeData.listings.length;
-                      index++
-                    ) ...[
-                      const SizedBox(height: 20),
-                      _headings(homeData.listings[index]),
-                      const SizedBox(height: 20),
-                      _listingsData(
-                        (listings
-                                .where(
-                                  (listing) =>
-                                      listing.category ==
-                                      homeData.listings[index],
-                                )
-                                .toList()
-                              ..sort((a, b) => b.rating.compareTo(a.rating)))
-                            .take(6)
-                            .toList(),
-                      ),
-                      const SizedBox(height: 20),
-                      _bannerData(homeData.banners[0]),
                     ],
-                  ]),
+                  ),
                 ),
               ),
 
-              //Footer tagline outside padding, full width
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+              SliverToBoxAdapter(child: _headings('Newly Added')),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+              listingsSliver(_newAddedListings),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+              SliverToBoxAdapter(child: _headings('Recommended')),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+              listingsSliver(_recommendedListings),
+
+              for (int i = 0; i < homeData.listings.length; i++) ...[
+                ...categorySectionSlivers(homeData, i),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
+              ],
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
               SliverToBoxAdapter(child: CommonWidgets.footerTagline()),
             ],
           );
@@ -344,35 +275,78 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _promoBanner(List<dynamic> promoBanners) {
+  Widget _bannerData(String imageLink) {
+    return Container(
+      // padding: const EdgeInsets.symmetric(vertical: ),
+      width: double.infinity,
+      height: 250,
+      color: AppColors.GREY_SHADE_300,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(0),
+        child: CachedNetworkImage(
+          imageUrl: imageLink,
+          fit: BoxFit.cover,
+
+          placeholder: (context, url) {
+            return Shimmer.fromColors(
+              baseColor: AppColors.GREY_SHADE_300,
+              highlightColor: AppColors.GREY_SHADE_100,
+              child: Container(
+                width: double.infinity,
+                height: double.infinity,
+                color: AppColors.WHITE,
+              ),
+            );
+          },
+
+          errorWidget:
+              (context, url, error) => Container(
+                color: AppColors.GREY_SHADE_300,
+                child: const Icon(Icons.image, color: AppColors.GREY),
+              ),
+        ),
+      ),
+    );
+  }
+
+  Widget _promoBanner(List<BannerModel> promoBanners) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 15),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       child: CarouselSlider.builder(
         itemCount: promoBanners.length,
         itemBuilder: (context, index, realIndex) {
-          final imageUrl = promoBanners[index];
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: CachedNetworkImage(
-              imageUrl: imageUrl,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              placeholder: (context, url) {
-                return Shimmer.fromColors(
-                  baseColor: AppColors.GREY_SHADE_300,
-                  highlightColor: AppColors.GREY_SHADE_100,
-                  child: Container(
-                    width: double.infinity,
-                    height: 180,
-                    color: Colors.white,
-                  ),
-                );
-              },
-              errorWidget:
-                  (context, url, error) => Container(
-                    color: Colors.grey.shade300,
-                    child: const Icon(Icons.image, color: Colors.grey),
-                  ),
+          final imageUrl = promoBanners[index].imageUrl;
+          return GestureDetector(
+            onTap: () {
+              final route = promoBanners[index].route;
+              if (route.isNotEmpty) {
+                // Check if the route is a listing detail route
+                if (route.startsWith('/listing/')) {
+                  final listingId = route.split('/').last; // extract '001'
+                  Navigator.pushNamed(context, '/listing/$listingId');
+                } else {
+                  // Navigate to any other route directly
+                  Navigator.pushNamed(context, route);
+                }
+              }
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                fadeInDuration: Duration.zero,
+                fadeOutDuration: Duration.zero,
+                placeholder: (context, url) {
+                  return Container(color: AppColors.GREY_SHADE_100);
+                },
+                errorWidget:
+                    (context, url, error) => Container(
+                      color: AppColors.GREY_SHADE_300,
+                      child: const Icon(Icons.image, color: AppColors.GREY),
+                    ),
+              ),
             ),
           );
         },
@@ -430,11 +404,48 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   listen: false,
                 ).setIndex(1);
+              } else if (heading == 'Newly Added') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => ListingPage(
+                          title: heading,
+                          query: FirebaseFirestore.instance
+                              .collection("listings")
+                              .where("verifiedBy", isNull: false)
+                              .orderBy("createdAt", descending: true),
+                        ),
+                  ),
+                );
+              } else if (heading == 'Recommended') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => ListingPage(
+                          title: heading,
+                          query: FirebaseFirestore.instance
+                              .collection("listings")
+                              .where("tags", arrayContains: "recommended")
+                              .where("verifiedBy", isNull: false)
+                              .orderBy("createdAt", descending: true),
+                        ),
+                  ),
+                );
               } else {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ListingPage(title: heading),
+                    builder:
+                        (context) => ListingPage(
+                          title: heading,
+                          query: FirebaseFirestore.instance
+                              .collection("listings")
+                              .where("category", isEqualTo: heading)
+                              .where("verifiedBy", isNull: false)
+                              .orderBy("createdAt", descending: true),
+                        ),
                   ),
                 );
               }
@@ -450,82 +461,78 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _categoriesTab(List<dynamic> categories) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: categories.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.8,
-      ),
-      itemBuilder: (context, index) {
-        final category = categories[index];
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ListingPage(title: category.category),
-              ),
-            );
-          },
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                height: 60,
-                width: 60,
-                padding: EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.GREY_SHADE_50,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.GREY_SHADE_300),
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 0.8,
+        ),
+        delegate: SliverChildBuilderDelegate(childCount: categories.length, (
+          context,
+          index,
+        ) {
+          final category = categories[index];
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (context) => ListingPage(
+                        title: category.category,
+                        query: FirebaseFirestore.instance
+                            .collection("listings")
+                            .where("category", isEqualTo: category.category)
+                            .where("verifiedBy", isNull: false)
+                            .orderBy("createdAt", descending: true),
+                      ),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10), // match container
-                  child: CachedNetworkImage(
-                    imageUrl:
-                        category.imageUrl, // 🔹 replace with your image URL
-                    fit: BoxFit.cover,
-
-                    placeholder: (context, url) {
-                      return Shimmer.fromColors(
-                        baseColor: AppColors.GREY_SHADE_300,
-                        highlightColor: AppColors.GREY_SHADE_100,
-                        child: Container(
-                          width: 60,
-                          height: 60,
-                          color: Colors.white,
-                        ),
-                      );
-                    },
-                    errorWidget:
-                        (context, url, error) => const Icon(
-                          Icons.broken_image,
-                          color: Colors.grey,
-                          size: 28,
-                        ),
+              );
+            },
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  height: 60,
+                  width: 60,
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.WHITE,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.GREY_SHADE_300),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10), // match container
+                    child: CachedNetworkSvg(
+                      url: category.imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      placeholder: Container(color: AppColors.GREY_SHADE_100),
+                      errorWidget: const Icon(Icons.broken_image),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                category.category,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.BLACK,
+                const SizedBox(height: 6),
+                Text(
+                  category.category,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.BLACK,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        }),
+      ),
     );
   }
 
@@ -554,7 +561,11 @@ class _HomeScreenState extends State<HomeScreen> {
           final listing = listings[index];
           return GestureDetector(
             onTap: () {
-              CommonMethods.navigateToListingDetailScreen(context, listing, listings);
+              CommonMethods.navigateToListingDetailScreen(
+                context,
+                listing,
+                listings,
+              );
             },
             child: Container(
               width: 280,
@@ -578,48 +589,62 @@ class _HomeScreenState extends State<HomeScreen> {
                           listing.images.isNotEmpty
                               ? listing.images.first.thumbUrl
                               : "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/static%2FImage_Placeholder.jpg?alt=media&token=22a0ec73-6352-4885-bfaf-c485750af28f",
-            
+
                       placeholder: (context, url) {
                         return Shimmer.fromColors(
-                          baseColor: Colors.grey.shade300,
-                          highlightColor: Colors.grey.shade100,
+                          baseColor: AppColors.GREY_SHADE_300,
+                          highlightColor: AppColors.GREY_SHADE_100,
                           child: Container(
                             width: double.infinity,
                             height: double.infinity,
-                            color: Colors.white,
+                            color: AppColors.WHITE,
                           ),
                         );
                       },
-            
+
                       errorWidget:
                           (context, url, error) => Container(
-                            color: Colors.grey.shade300,
-                            child: const Icon(Icons.image, color: Colors.grey),
+                            color: AppColors.GREY_SHADE_300,
+                            child: const Icon(
+                              Icons.image,
+                              color: AppColors.GREY,
+                            ),
                           ),
                       width: 140,
                       height: 180,
                       fit: BoxFit.cover,
+                      fadeInDuration: Duration.zero,
+                      fadeOutDuration: Duration.zero,
                     ),
                   ),
-            
+
                   // 🔹 Right Side Details
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          Text(
-                            listing.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            decoration: BoxDecoration(
+                              color: AppColors.THEME_COLOR,
+                              borderRadius: BorderRadius.circular(1),
+                            ),
+                            child: const Text(
+                              "Featured",
+                              style: TextStyle(
+                                color: AppColors.WHITE,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 8),
                           Text(
                             listing.category,
                             style: const TextStyle(
@@ -630,11 +655,45 @@ class _HomeScreenState extends State<HomeScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 8),
+                          Text(
+                            listing.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on,
+                                size: 14,
+                                color: AppColors.GREY,
+                              ),
+                              Expanded(
+                                child: Text(
+                                  listing.address,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.GREY,
+                                  ),
+                                  maxLines: 1, // show only 1 line
+                                  overflow:
+                                      TextOverflow
+                                          .ellipsis, // adds "..." if text too long
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
                           Row(
                             children: [
                               const Icon(
                                 Icons.star,
-                                color: AppColors.THEME_COLOR,
+                                color: AppColors.AMBER,
                                 size: 16,
                               ),
                               Text(
@@ -656,68 +715,74 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _listingsData(List<Listing> listings) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: listings.length,
-      padding: const EdgeInsets.symmetric(horizontal: 15),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 3 / 3.8,
-      ),
-      itemBuilder: (context, index) {
-        final listing = listings[index];
+  Widget listingsSliver(Future<List<Listing>> future) {
+    return FutureBuilder<List<Listing>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            sliver: SliverGrid(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => CommonWidgets.shimmerlistingCard(),
+                childCount: 6,
+              ),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 3 / 3.8,
+              ),
+            ),
+          );
+        }
 
-        return GestureDetector(
-          onTap: () {
-            CommonMethods.navigateToListingDetailScreen(context, listing, listings);
-          },
-          child: CommonWidgets.listingCard(listing),
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: Text("No listings found")),
+            ),
+          );
+        }
+
+        final listings = snapshot.data!;
+
+        return SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          sliver: SliverGrid(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final listing = listings[index];
+                return GestureDetector(
+                  onTap: () {
+                    CommonMethods.navigateToListingDetailScreen(
+                      context,
+                      listing,
+                      listings,
+                    );
+                  },
+                  child: CommonWidgets.listingCard(listing),
+                );
+              },
+              childCount: listings.length, // ✅ SAFE
+            ),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 3 / 3.8,
+            ),
+          ),
         );
       },
-    );
-  }
-
-  Widget _bannerData(String imageLink) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      width: double.infinity,
-      height: 250,
-      color: AppColors.GREY_SHADE_300,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: CachedNetworkImage(
-          imageUrl: imageLink,
-          fit: BoxFit.cover,
-
-          placeholder: (context, url) {
-            return Shimmer.fromColors(
-              baseColor: Colors.grey.shade300,
-              highlightColor: Colors.grey.shade100,
-              child: Container(
-                width: double.infinity,
-                height: double.infinity,
-                color: Colors.white,
-              ),
-            );
-          },
-
-          errorWidget:
-              (context, url, error) => Container(
-                color: Colors.grey.shade300,
-                child: const Icon(Icons.image, color: Colors.grey),
-              ),
-        ),
-      ),
     );
   }
 }
 
 class SearchBarHeader extends SliverPersistentHeaderDelegate {
   final Widget child;
+
   SearchBarHeader({required this.child});
 
   @override
@@ -726,14 +791,35 @@ class SearchBarHeader extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
+    // 🔹 Determine how far the header has shrunk (0 → fully visible, 1 → pinned)
+    final t = (shrinkOffset / maxExtent).clamp(0.0, 1.0);
+
+    // 🔹 Interpolate between two gradients
+    final Color base = AppColors.THEME_COLOR;
+
+    final Color startColor =
+        Color.lerp(
+          base.withValues(alpha: 0.5), // instead of withOpacity(0.7)
+          base,
+          t,
+        )!;
+
+    final Color endColor =
+        Color.lerp(
+          base.withValues(alpha: 0.2),
+          base.withValues(alpha: 0.8),
+          t,
+        )!;
+
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.WHITE, // keeps background same
+        gradient: LinearGradient(
+          colors: [startColor, endColor],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
         border: Border(
-          bottom: BorderSide(
-            color: AppColors.GREY_SHADE_300, // line color
-            width: 1.0, // line thickness
-          ),
+          bottom: BorderSide(color: Colors.grey.shade300, width: 1.0),
         ),
       ),
       padding: const EdgeInsets.only(left: 10, right: 10, top: 5, bottom: 20),
@@ -741,7 +827,7 @@ class SearchBarHeader extends SliverPersistentHeaderDelegate {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => SearchScreen()),
+            MaterialPageRoute(builder: (context) => const SearchScreen()),
           );
         },
         child: child,
@@ -750,11 +836,11 @@ class SearchBarHeader extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  double get maxExtent => 80; // fixed height
+  double get maxExtent => 80;
   @override
-  double get minExtent => 80; // fixed height
+  double get minExtent => 80;
 
   @override
   bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) =>
-      false;
+      true;
 }

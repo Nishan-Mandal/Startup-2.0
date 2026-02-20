@@ -14,10 +14,26 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs access to your location to autofill coordinates.</string>
 
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+	<string>https</string>
+	<string>tel</string>
+	</array>
+
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<true/>
+
+	<key>UIBackgroundModes</key>
+	<array>
+	<string>remote-notification</string>
+	</array>
+
+	<key>GMSApiKey</key>
+	<string>AIzaSyBrWhs0x-66O88eOnlO-_1WztjU-QxOWBE</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Startup 20</string>
+	<string>NeedMet</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -25,7 +41,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>startup_20</string>
+	<string>NeedMet</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

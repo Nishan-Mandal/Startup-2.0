@@ -1,15 +1,12 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/category_model.dart';
+import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
-import 'package:startup_20/providers/bottom_nav_provider.dart';
 
 class CategoryScreen extends StatefulWidget {
   const CategoryScreen({super.key});
@@ -19,150 +16,12 @@ class CategoryScreen extends StatefulWidget {
 }
 
 class _CategoryScreenState extends State<CategoryScreen> {
-  late ScrollController _scrollController;
+  late Future<List<Category>> _categoriesFuture; // cache the future
 
   @override
   void initState() {
     super.initState();
-    _handleScroll();
-    // importCategories();
-  }
-
-  Future<void> importCategories() async {
-    final List<Map<String, dynamic>> categories = [
-      {
-        "id": "1",
-        "name": "Gym",
-        "description": "Fitness & training centers",
-        "imageUrl":
-            "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/categories%2FElectrician%2FRoom%20Rent%20v1.png?alt=media&token=74973bd6-d121-46fa-b66a-f9798c039b59",
-        "tags": ["fitness", "workout", "training"],
-        "section": "Health & Fitness",
-        "createdAt": DateTime.parse("2025-09-16T10:00:00Z"),
-      },
-      {
-        "id": "2",
-        "name": "Electrician",
-        "description": "Electrical repair and services",
-        "imageUrl":
-            "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/categories%2FElectrician%2FRoom%20Rent%20v1.png?alt=media&token=74973bd6-d121-46fa-b66a-f9798c039b59",
-        "tags": ["wiring", "repair", "appliance"],
-        "section": "Home Services",
-        "createdAt": DateTime.parse("2025-09-16T10:05:00Z"),
-      },
-      {
-        "id": "3",
-        "name": "Plumber",
-        "description": "Water, drainage, and pipe services",
-        "imageUrl":
-            "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/categories%2FElectrician%2FRoom%20Rent%20v1.png?alt=media&token=74973bd6-d121-46fa-b66a-f9798c039b59",
-        "tags": ["water", "pipes", "repair"],
-        "section": "Home Services",
-        "createdAt": DateTime.parse("2025-09-16T10:10:00Z"),
-      },
-      {
-        "id": "4",
-        "name": "Doctor",
-        "description": "General physicians & specialists",
-        "imageUrl":
-            "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/categories%2FElectrician%2FRoom%20Rent%20v1.png?alt=media&token=74973bd6-d121-46fa-b66a-f9798c039b59",
-        "tags": ["health", "clinic", "checkup"],
-        "section": "Health & Fitness",
-        "createdAt": DateTime.parse("2025-09-16T10:15:00Z"),
-      },
-      {
-        "id": "5",
-        "name": "Yoga",
-        "description": "Yoga classes & meditation centers",
-        "imageUrl":
-            "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/categories%2FElectrician%2FRoom%20Rent%20v1.png?alt=media&token=74973bd6-d121-46fa-b66a-f9798c039b59",
-        "tags": ["yoga", "wellness", "meditation"],
-        "section": "Health & Fitness",
-        "createdAt": DateTime.parse("2025-09-16T10:20:00Z"),
-      },
-      {
-        "id": "6",
-        "name": "Restaurants",
-        "description": "Dine-in & takeaway food services",
-        "imageUrl":
-            "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/categories%2FElectrician%2FRoom%20Rent%20v1.png?alt=media&token=74973bd6-d121-46fa-b66a-f9798c039b59",
-        "tags": ["food", "dining", "takeaway"],
-        "section": "Food & Beverages",
-        "createdAt": DateTime.parse("2025-09-16T10:25:00Z"),
-      },
-      {
-        "id": "7",
-        "name": "Cafes",
-        "description": "Coffee shops & casual eateries",
-        "imageUrl":
-            "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/categories%2FElectrician%2FRoom%20Rent%20v1.png?alt=media&token=74973bd6-d121-46fa-b66a-f9798c039b59",
-        "tags": ["coffee", "snacks", "casual"],
-        "section": "Food & Beverages",
-        "createdAt": DateTime.parse("2025-09-16T10:30:00Z"),
-      },
-      {
-        "id": "8",
-        "name": "Tutors",
-        "description": "Private tutors for different subjects",
-        "imageUrl":
-            "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/categories%2FElectrician%2FRoom%20Rent%20v1.png?alt=media&token=74973bd6-d121-46fa-b66a-f9798c039b59",
-        "tags": ["education", "learning", "study"],
-        "section": "Education",
-        "createdAt": DateTime.parse("2025-09-16T10:35:00Z"),
-      },
-      {
-        "id": "9",
-        "name": "Music Classes",
-        "description": "Learn guitar, piano, and vocals",
-        "imageUrl":
-            "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/categories%2FElectrician%2FRoom%20Rent%20v1.png?alt=media&token=74973bd6-d121-46fa-b66a-f9798c039b59",
-        "tags": ["music", "guitar", "piano"],
-        "section": "Education",
-        "createdAt": DateTime.parse("2025-09-16T10:40:00Z"),
-      },
-      {
-        "id": "10",
-        "name": "Carpenter",
-        "description": "Woodwork and furniture repairs",
-        "imageUrl":
-            "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/categories%2FElectrician%2FRoom%20Rent%20v1.png?alt=media&token=74973bd6-d121-46fa-b66a-f9798c039b59",
-        "tags": ["furniture", "wood", "repair"],
-        "section": "Home Services",
-        "createdAt": DateTime.parse("2025-09-16T10:45:00Z"),
-      },
-    ];
-
-    for (var category in categories) {
-      await FirebaseFirestore.instance.collection("categories").doc().set({
-        "name": category["name"],
-        "description": category["description"],
-        "imageUrl": category["imageUrl"],
-        "tags": category["tags"],
-        "section": category["section"],
-        "createdAt": category["createdAt"],
-      });
-      print("✅ Imported: ${category['name']}");
-    }
-  }
-
-  void _handleScroll() {
-    _scrollController = ScrollController();
-
-    _scrollController.addListener(() {
-      if (_scrollController.position.userScrollDirection ==
-          ScrollDirection.reverse) {
-        Provider.of<BottomNavProvider>(context, listen: false).hideNavBar();
-      } else if (_scrollController.position.userScrollDirection ==
-          ScrollDirection.forward) {
-        Provider.of<BottomNavProvider>(context, listen: false).showNavBar();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+    _categoriesFuture = _fetchCategories();
   }
 
   /// 🔹 Fetch categories from Firestore
@@ -178,7 +37,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
     return Scaffold(
       backgroundColor: AppColors.GREY_SHADE_50,
       body: CustomScrollView(
-        controller: _scrollController,
         slivers: [
           // 🔹 Top Bar + Location Selector
           CommonWidgets.topSection(context),
@@ -192,7 +50,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
           // 🔹 Fetch & Render Categories
           SliverToBoxAdapter(
             child: FutureBuilder<List<Category>>(
-              future: _fetchCategories(),
+              future: _categoriesFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Column(
@@ -229,7 +87,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
                 return Column(
                   children:
                       groupedCategories.entries.map((entry) {
-                        return buildCategorySection(entry.key, entry.value);
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 5),
+                          child: buildCategorySection(entry.key, entry.value),
+                        );
                       }).toList(),
                 );
               },
@@ -249,7 +110,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
       children: [
         // 🔹 Section Heading
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             title,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -258,6 +119,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
         // 🔹 Grid
         GridView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: categories.length,
@@ -265,7 +127,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
             crossAxisCount: 4,
             mainAxisSpacing: 16,
             crossAxisSpacing: 16,
-            childAspectRatio: 0.8,
+            childAspectRatio: 0.65, // slightly taller to fit 2-line text
           ),
           itemBuilder: (context, index) {
             final category = categories[index];
@@ -274,17 +136,24 @@ class _CategoryScreenState extends State<CategoryScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ListingPage(title: category.name),
+                    builder:
+                        (context) => ListingPage(
+                          title: category.name,
+                          query: FirebaseFirestore.instance
+                              .collection("listings")
+                              .where("category", isEqualTo: category.name)
+                              .where("verifiedBy", isNull: false)
+                              .orderBy("createdAt", descending: true),
+                        ),
                   ),
                 );
               },
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
                     height: 60,
                     width: 60,
-                    padding: EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: AppColors.WHITE,
                       borderRadius: BorderRadius.circular(16),
@@ -292,22 +161,20 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     ),
                     child:
                         category.imageUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                              imageUrl: category.imageUrl,
+                            ? CachedNetworkSvg(
+                              url: category.imageUrl,
                               fit: BoxFit.cover,
-                              placeholder:
-                                  (context, url) => Shimmer.fromColors(
-                                    baseColor: AppColors.GREY_SHADE_300,
-                                    highlightColor: AppColors.GREY_SHADE_100,
-                                    child: Container(
-                                      color: AppColors.GREY_SHADE_300,
-                                    ),
-                                  ),
-                              errorWidget:
-                                  (context, url, error) => const Icon(
-                                    Icons.broken_image,
-                                    color: AppColors.GREY,
-                                  ),
+                              width: double.infinity,
+                              height: double.infinity,
+                              // show your shimmer while loading
+                              placeholder: Shimmer.fromColors(
+                                baseColor: AppColors.GREY_SHADE_300,
+                                highlightColor: AppColors.GREY_SHADE_100,
+                                child: Container(
+                                  color: AppColors.GREY_SHADE_300,
+                                ),
+                              ),
+                              errorWidget: const Icon(Icons.broken_image),
                             )
                             : const Icon(
                               Icons.image_not_supported,
@@ -316,16 +183,20 @@ class _CategoryScreenState extends State<CategoryScreen> {
                   ),
 
                   const SizedBox(height: 6),
-                  Text(
-                    category.name,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.BLACK,
+
+                  // Flexible to allow 2 lines
+                  Flexible(
+                    child: Text(
+                      category.name,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.BLACK,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

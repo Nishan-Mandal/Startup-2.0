@@ -2,14 +2,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
+import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
+import 'package:startup_20/presentation/screens/search_screen.dart';
+import 'package:startup_20/presentation/screens/add_listing_screen.dart';
+import 'package:startup_20/providers/auth_provider.dart'; // ✅ Import your AddListingScreen
 
 class ListingPage extends StatefulWidget {
   final String title;
-  const ListingPage({super.key, required this.title});
+  final Query query;
+  const ListingPage({super.key, required this.title, required this.query});
 
   @override
   State<ListingPage> createState() => _ListingPageState();
@@ -17,16 +21,16 @@ class ListingPage extends StatefulWidget {
 
 class _ListingPageState extends State<ListingPage> {
   late List<Listing> listings;
+
   /// 🔹 Fetch listings from Firestore using the Listing model
   Future<List<Listing>> fetchListings() async {
-    final snapshot =
-        await FirebaseFirestore.instance
-            .collection("listings")
-            .where("category", isEqualTo: widget.title)
-            .orderBy("createdAt", descending: true)
-            .get();
+    final snapshot = await widget.query.get();
 
-    listings = snapshot.docs.map((doc) => Listing.fromJson(doc.data())).toList();
+    listings =
+        snapshot.docs
+            .map((doc) => Listing.fromJson(doc.data() as Map<String, dynamic>))
+            .toList();
+
     return listings;
   }
 
@@ -50,31 +54,34 @@ class _ListingPageState extends State<ListingPage> {
               ],
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // 🔹 Back Arrow + Title
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios, size: 20),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      widget.title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+                // 🔹 Back button
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios, size: 20),
+                  onPressed: () => Navigator.pop(context),
                 ),
 
-                // 🔹 Search Icon
+                // 🔹 Title (STRICTLY constrained)
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+
+                // 🔹 Search icon (fixed width)
                 IconButton(
                   icon: const Icon(Icons.search, size: 24),
                   onPressed: () {
-                    // TODO: Add search logic
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => SearchScreen()),
+                    );
                   },
                 ),
               ],
@@ -90,7 +97,7 @@ class _ListingPageState extends State<ListingPage> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return GridView.builder(
               padding: const EdgeInsets.all(15),
-              itemCount: 6, // number of shimmer cards you want
+              itemCount: 6,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
@@ -101,6 +108,7 @@ class _ListingPageState extends State<ListingPage> {
                   (context, index) => CommonWidgets.shimmerlistingCard(),
             );
           }
+
           if (snapshot.hasError) {
             debugPrint("Error: ${snapshot.error}");
             return Center(child: Text("Error: ${snapshot.error}"));
@@ -109,7 +117,7 @@ class _ListingPageState extends State<ListingPage> {
           final listings = snapshot.data ?? [];
 
           if (listings.isEmpty) {
-            return const Center(child: Text("No listings found"));
+            return _buildEmptyState(context);
           }
 
           return GridView.builder(
@@ -123,16 +131,106 @@ class _ListingPageState extends State<ListingPage> {
             ),
             itemBuilder: (context, index) {
               final listing = listings[index];
-
               return GestureDetector(
                 onTap: () {
-                  CommonMethods.navigateToListingDetailScreen(context, listing, listings);
+                  if (widget.title == 'Pending Approvals') {
+                    CommonMethods.preloadListingImages(context, listing);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => ListingDetailScreen(
+                              listing: listing,
+                              similarListings: listings,
+                            ),
+                      ),
+                    ).then((value) {
+                      // Reload your data here
+                      setState(() {});
+                    });
+                    ;
+                  } else {
+                    CommonMethods.navigateToListingDetailScreen(
+                      context,
+                      listing,
+                      listings,
+                    );
+                  }
                 },
                 child: CommonWidgets.listingCard(listing),
               );
             },
           );
         },
+      ),
+    );
+  }
+
+  /// 🔹 Interactive Empty State Widget
+  Widget _buildEmptyState(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // 🖼 Optional illustration (if you have one)
+            Icon(
+              Icons.storefront_rounded,
+              size: 80,
+              color: AppColors.THEME_COLOR.withOpacity(0.8),
+            ),
+            const SizedBox(height: 20),
+
+            Text(
+              "No listings found in '${widget.title}'",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+
+            const Text(
+              "Be the first to contribute by adding a store or service related to this category!",
+              style: TextStyle(fontSize: 15, color: AppColors.GREY),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+
+            // 🔹 Button to navigate to Add Listing
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.THEME_COLOR,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.add, color: AppColors.WHITE),
+              label: const Text(
+                "Contribute Now",
+                style: TextStyle(
+                  color: AppColors.WHITE,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) =>
+                            AppAuthProvider.isAnonymousUser()
+                                ? SignInScreen(skip: false)
+                                : AddListingScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

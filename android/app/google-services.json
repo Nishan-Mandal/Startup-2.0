@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1005062312308:android:5c9eb04b8cf2c326471c21",
+        "mobilesdk_app_id": "1:1005062312308:android:8bcefa46a3298f5d471c21",
         "android_client_info": {
-          "package_name": "com.example.startup2"
+          "package_name": "com.findon.app"
         }
       },
       "oauth_client": [],
