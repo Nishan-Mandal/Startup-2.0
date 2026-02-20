@@ -181,9 +181,9 @@ class _AddListingScreenState extends State<AddListingScreen> {
       geo: Geo(lat: _latitude, lng: _longitude),
       phone: _commonFormCtrl.values['Phone'] ?? '',
 
-      category: _selectedCategoryName!,
-      categoryId: _selectedCategoryId!,
-      tags: [_selectedCategoryName!],
+      category: _selectedCategoryName??'',
+      categoryId: _selectedCategoryId??'',
+      tags: [_selectedCategoryName??''],
 
       ownerName: _commonFormCtrl.values['Owners Name'] ?? '',
       addedBy: FirebaseAuth.instance.currentUser?.uid ?? 'anonymous',
@@ -199,7 +199,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
       rating: 0,
       ratingCount: 0,
 
-      since: int.tryParse(details['Since']?.toString() ?? '2025') ?? 2025,
+      since: int.tryParse(_commonFormCtrl.values['Since']?.toString() ?? '2025') ?? 2025,
       likes: 0,
       views: 0,
 

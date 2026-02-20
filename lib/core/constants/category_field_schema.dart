@@ -2,7 +2,7 @@ class CategoryFieldSchema {
   static const Map<String, dynamic> commonFields = {
     "formSchema": [
       {"label": "Shop/Service Name", "type": "string"},
-      {"key": "ownersName", "label": "Owners Name", "type": "string"},
+      {"label": "Owners Name", "type": "string"},
       {"label": "Phone", "type": "string", "keyboardType": "number"},
 
       {"label": "Since", "type": "string", "keyboardType": "number"},
