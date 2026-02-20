@@ -1,5 +1,3 @@
-import 'package:startup_20/data/models/category_model.dart';
-
 class BannerModel {
   final String imageUrl;
   final String route;

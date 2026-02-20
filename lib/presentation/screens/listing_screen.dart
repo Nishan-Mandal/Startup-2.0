@@ -54,33 +54,33 @@ class _ListingPageState extends State<ListingPage> {
               ],
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // 🔹 Back Arrow + Title
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios, size: 20),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      widget.title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+                // 🔹 Back button
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios, size: 20),
+                  onPressed: () => Navigator.pop(context),
                 ),
 
-                // 🔹 Search Icon
+                // 🔹 Title (STRICTLY constrained)
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+
+                // 🔹 Search icon (fixed width)
                 IconButton(
                   icon: const Icon(Icons.search, size: 24),
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => SearchScreen()),
+                      MaterialPageRoute(builder: (_) => SearchScreen()),
                     );
                   },
                 ),
@@ -134,6 +134,7 @@ class _ListingPageState extends State<ListingPage> {
               return GestureDetector(
                 onTap: () {
                   if (widget.title == 'Pending Approvals') {
+                    CommonMethods.preloadListingImages(context, listing);
                     Navigator.push(
                       context,
                       MaterialPageRoute(

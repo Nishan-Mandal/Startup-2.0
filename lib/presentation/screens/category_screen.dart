@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
@@ -9,7 +7,6 @@ import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
-import 'package:startup_20/providers/bottom_nav_provider.dart';
 
 class CategoryScreen extends StatefulWidget {
   const CategoryScreen({super.key});
@@ -179,38 +176,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
                               ),
                               errorWidget: const Icon(Icons.broken_image),
                             )
-                            // SvgPicture.network(
-                            //   category.imageUrl,
-                            //   fit: BoxFit.cover,
-                            //   width: double.infinity,
-                            //   height: double.infinity,
-                            //   // show your shimmer while loading
-                            //   placeholderBuilder:
-                            //       (context) => Shimmer.fromColors(
-                            //         baseColor: AppColors.GREY_SHADE_300,
-                            //         highlightColor: AppColors.GREY_SHADE_100,
-                            //         child: Container(
-                            //           color: AppColors.GREY_SHADE_300,
-                            //         ),
-                            //       ),
-                            // )
-                            // CachedNetworkImage(
-                            //   imageUrl: category.imageUrl,
-                            //   fit: BoxFit.cover,
-                            //   placeholder:
-                            //       (context, url) => Shimmer.fromColors(
-                            //         baseColor: AppColors.GREY_SHADE_300,
-                            //         highlightColor: AppColors.GREY_SHADE_100,
-                            //         child: Container(
-                            //           color: AppColors.GREY_SHADE_300,
-                            //         ),
-                            //       ),
-                            //   errorWidget:
-                            //       (context, url, error) => const Icon(
-                            //         Icons.broken_image,
-                            //         color: AppColors.GREY,
-                            //       ),
-                            // )
                             : const Icon(
                               Icons.image_not_supported,
                               color: AppColors.GREY,

@@ -1,20 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/core/services/notification_service.dart';
 import 'package:startup_20/data/models/listing_model.dart';
-import 'package:startup_20/presentation/screens/conversation/chat_screen.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/notification_screen.dart';
 import 'package:startup_20/presentation/screens/onboarding_screen.dart';
 import 'package:startup_20/providers/chat_provider.dart';
-
 import 'providers/auth_provider.dart';
 import 'providers/bottom_nav_provider.dart';
 import 'presentation/screens/bottom_nav_screen.dart';
@@ -47,7 +43,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firebaseUser = context.watch<AppAuthProvider>().firebaseUser;
+    final firebaseUser = context.read<AppAuthProvider>().firebaseUser;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'NeedMet',

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/presentation/screens/listing_map_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/notification_screen.dart';
 import 'package:startup_20/presentation/screens/profile_screen.dart';
@@ -73,7 +74,7 @@ class CommonWidgets {
 
   /// 🔹 Notifications Button
   static Widget _notifications(BuildContext context) {
-    final appUser = context.watch<AppAuthProvider>().appUser;
+    final appUser = context.read<AppAuthProvider>().appUser;
 
     if (AppAuthProvider.isAnonymousUser()) {
       // If not logged in or anonymous → no unread count stream
@@ -297,6 +298,8 @@ class CommonWidgets {
                       color: AppColors.GREY,
                     ),
                   ),
+              fadeInDuration: Duration.zero,
+              fadeOutDuration: Duration.zero,
             ),
           ),
 

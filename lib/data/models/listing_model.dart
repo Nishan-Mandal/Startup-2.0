@@ -15,6 +15,7 @@ class Listing {
   final String categoryId;
   final List<String> tags;
   final String addedBy;
+  final String updatedBy;
   final bool isClaimed;
   final String ownerId;
   final String ownerName;
@@ -48,6 +49,7 @@ class Listing {
     required this.categoryId,
     required this.tags,
     required this.addedBy,
+    required this.updatedBy,
     required this.isClaimed,
     required this.ownerId,
     required this.ownerName,
@@ -86,6 +88,7 @@ class Listing {
       categoryId: json['categoryId'] ?? '',
       tags: List<String>.from(json['tags'] ?? []),
       addedBy: json['addedBy'] ?? '',
+      updatedBy: json['updatedBy'] ?? '',
       isClaimed: json['isClaimed'] ?? false,
       ownerId: json['ownerId'],
       ownerName: json['ownerName'] ?? 'Unknown',

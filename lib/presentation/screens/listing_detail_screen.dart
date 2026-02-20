@@ -1,7 +1,4 @@
 import 'dart:io';
-import 'dart:math';
-import 'dart:typed_data';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -44,9 +41,7 @@ class ListingDetailScreen extends StatefulWidget {
 class _ListingDetailScreenState extends State<ListingDetailScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  double _selectedRating = 0;
   bool _isChatLoading = false;
-  bool _isSendingRewiew = false;
   bool _isApproving = false;
   bool _isLoading = false;
   bool _isLiked = false;
@@ -193,6 +188,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   void _launchCaller(String phoneNumber) async {
+    if (AppAuthProvider.isAnonymousUser()) {
+      CommonMethods.navigateToSignInScreen(context);
+      return;
+    }
     final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
     try {
       bool launched = await launchUrl(
@@ -381,6 +380,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         categoryId: widget.listing.categoryId,
         tags: widget.listing.tags,
         addedBy: widget.listing.addedBy,
+        updatedBy: widget.listing.updatedBy,
         ownerId: widget.listing.ownerId,
         ownerName: widget.listing.ownerName,
         claimStatus: "pending",
@@ -449,8 +449,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   void _shareListing() {
-    final shareUrl =
-        "https://needmet.in/listing/${widget.listing.listingId}";
+    final shareUrl = "https://needmet.in/listing/${widget.listing.listingId}";
     SharePlus.instance.share(
       ShareParams(text: 'Check out this listing on NeedMet:\n$shareUrl'),
     );
@@ -754,9 +753,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     imageUrl: img.fullUrl,
                     fit: BoxFit.cover,
                     width: double.infinity,
+                    fadeInDuration: Duration.zero,
+                    fadeOutDuration: Duration.zero,
                     placeholder:
-                        (_, __) =>
-                            const Center(child: CircularProgressIndicator()),
+                        (_, __) => Container(color: Colors.grey.shade200),
                     errorWidget:
                         (_, __, ___) =>
                             const Icon(Icons.broken_image, color: Colors.grey),
@@ -850,7 +850,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             children: [
               Text(
                 listing.name.length > 25
-                    ? '${listing.name.substring(0, 25)}...'
+                    ? '${listing.name.substring(0, 20)}...'
                     : listing.name,
                 style: const TextStyle(
                   fontSize: 20,
@@ -1029,8 +1029,23 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   void _openWhatsApp(String phone) async {
-    final url = Uri.parse("https://wa.me/$phone");
-    await launchUrl(url, mode: LaunchMode.externalApplication);
+    // Remove spaces, dashes, brackets etc.
+    String normalized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+
+    // Add country code if missing (India +91)
+    if (!normalized.startsWith('+')) {
+      if (normalized.length == 10) {
+        normalized = '91$normalized';
+      }
+    } else {
+      normalized = normalized.replaceFirst('+', '');
+    }
+
+    final Uri url = Uri.parse('https://wa.me/$normalized');
+
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch WhatsApp');
+    }
   }
 
   Widget _buildSellerSection(Listing listing) {
@@ -1706,6 +1721,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 icon: const Icon(Icons.directions),
                 label: const Text("Direction"),
                 onPressed: () async {
+                  if (AppAuthProvider.isAnonymousUser()) {
+                    CommonMethods.navigateToSignInScreen(context);
+                    return;
+                  }
                   final lat = widget.listing.geo.lat;
                   final lng = widget.listing.geo.lng;
 
@@ -1754,6 +1773,35 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     );
   }
 
+  String formatValue(dynamic value, String key) {
+    // Boolean → Yes / No
+    if (value is bool) {
+      return value ? 'Yes' : 'No';
+    }
+
+    // Currency formatting
+    if (key == 'Monthly Rent' || key == 'Electric Charge / unit') {
+      return '₹$value';
+    }
+
+    // Currency range (min-max)
+    if (value is Map && value.containsKey('min') && value.containsKey('max')) {
+      final min = value['min'];
+      final max = value['max'];
+
+      if (min != null && max != null) {
+        return '₹$min - ₹$max';
+      } else if (min != null) {
+        return 'From ₹$min';
+      } else if (max != null) {
+        return 'Up to ₹$max';
+      }
+    }
+
+    // Default
+    return value.toString();
+  }
+
   Widget _buildDetailsTable(Map<String, dynamic> details) {
     if (details.isEmpty) {
       return const SizedBox();
@@ -1793,7 +1841,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 /// 🔹 Header Row
                 TableRow(
                   decoration: BoxDecoration(
-                    color: AppColors.GREY_SHADE_300.withOpacity(0.4),
+                    color: AppColors.GREY_SHADE_300.withAlpha(100),
                   ),
                   children: const [
                     Padding(
@@ -1826,7 +1874,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 /// 🔹 Data Rows
                 ...details.entries.map((e) {
                   final key = e.key;
-                  final value = e.value.toString();
+                  final formattedValue = formatValue(e.value, e.key);
 
                   return TableRow(
                     children: [
@@ -1846,13 +1894,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       Padding(
                         padding: const EdgeInsets.all(12),
                         child:
-                            isURL(value)
+                            isURL(formattedValue)
                                 ? GestureDetector(
                                   onTap: () async {
                                     final uri = Uri.parse(
-                                      value.startsWith("http")
-                                          ? value
-                                          : "https://$value",
+                                      formattedValue.startsWith("http")
+                                          ? formattedValue
+                                          : "https://$formattedValue",
                                     );
                                     await launchUrl(
                                       uri,
@@ -1860,7 +1908,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                                     );
                                   },
                                   child: Text(
-                                    value,
+                                    formattedValue,
                                     style: const TextStyle(
                                       color: Colors.blue,
                                       fontSize: 14,
@@ -1869,7 +1917,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                                   ),
                                 )
                                 : Text(
-                                  key == 'Monthly Rent' ? '₹$value' : value,
+                                  formattedValue,
                                   style: const TextStyle(
                                     color: AppColors.GREY,
                                     fontSize: 14,
@@ -1954,7 +2002,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final listing = widget.listing;
-    final appUser = context.watch<AppAuthProvider>().appUser;
+    final appUser = context.read<AppAuthProvider>().appUser;
 
     return Scaffold(
       backgroundColor: AppColors.WHITE,
@@ -2081,7 +2129,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildImageCarousel(listing),
+                RepaintBoundary(child: _buildImageCarousel(listing)),
                 const SizedBox(height: 15),
                 _buildListingInfo(listing),
                 Padding(
@@ -2369,6 +2417,8 @@ class _FullScreenImageViewState extends State<_FullScreenImageView> {
                 child: CachedNetworkImage(
                   imageUrl: widget.images[index],
                   fit: BoxFit.contain,
+                  fadeInDuration: Duration.zero,
+                  fadeOutDuration: Duration.zero,
                   placeholder:
                       (context, url) =>
                           const Center(child: CircularProgressIndicator()),

@@ -1,21 +1,12 @@
-import 'dart:math';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
-import 'package:startup_20/core/services/notification_service.dart';
-import 'package:startup_20/data/models/category_model.dart';
 import 'package:startup_20/data/models/home_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
-import 'package:startup_20/main.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
@@ -121,6 +112,67 @@ class _HomeScreenState extends State<HomeScreen> {
     return HomeModel.fromJson(doc.data());
   }
 
+  List<Listing> listingsByCategory(String category) {
+    return listings.where((l) => l.category == category).toList()
+      ..sort((a, b) => b.rating.compareTo(a.rating));
+  }
+
+  List<Widget> categorySectionSlivers(HomeModel homeData, int index) {
+    final categoryName = homeData.listings[index];
+    debugPrint(categoryName);
+    final categoryListings = listingsByCategory(categoryName);
+
+    if (categoryListings.isEmpty) return [];
+
+    return [
+      // 🔹 Banner
+      sectionBanner(homeData, index),
+
+      // 🔹 Category Heading
+      SliverToBoxAdapter(child: _headings(categoryName)),
+      const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+      // 🔹 Listings Grid
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 15),
+        sliver: SliverGrid(
+          delegate: SliverChildBuilderDelegate((context, i) {
+            final listing = categoryListings[i];
+            return GestureDetector(
+              onTap: () {
+                CommonMethods.navigateToListingDetailScreen(
+                  context,
+                  listing,
+                  categoryListings,
+                );
+              },
+              child: CommonWidgets.listingCard(listing),
+            );
+          }, childCount: categoryListings.take(6).length),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 3 / 3.8,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  SliverToBoxAdapter sectionBanner(HomeModel homeData, int index) {
+    if (homeData.banners.length <= index) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: _bannerData(homeData.banners[index].imageUrl),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -143,176 +195,116 @@ class _HomeScreenState extends State<HomeScreen> {
 
           return CustomScrollView(
             slivers: [
-              // 🔹 Top Bar + Location Selector
               CommonWidgets.topSection(context),
 
-              // 🔹 Pinned Search Bar
               SliverPersistentHeader(
                 pinned: true,
                 delegate: SearchBarHeader(child: CommonWidgets.searchBar()),
               ),
 
-              // 🔹 Scrollable Content
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    _promoBanner(homeData.promoBanners),
-                    const SizedBox(height: 8),
-                    _dotsIndicator(homeData.promoBanners),
-                    const SizedBox(height: 20),
-                    _headings('Popular Categories'),
-                    const SizedBox(height: 12),
-                    _categoriesTab(homeData.categories),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: EdgeInsets.only(bottom: 30, top: 20),
-                      color: AppColors.BLACK_12,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          _featuredAdsHeading(),
-                          const SizedBox(height: 12),
-                          FutureBuilder<List<Listing>>(
-                            future: _featuredListings,
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
-                              if (snapshot.hasError) {
-                                return Text("Error: ${snapshot.error}");
-                              }
-                              final featuredListings = snapshot.data ?? [];
+              SliverToBoxAdapter(child: const SizedBox(height: 10)),
 
-                              if (featuredListings.isEmpty) {
-                                return const Text(
-                                  "No featured listings available",
-                                );
-                              }
+              /// Promo banner
+              SliverToBoxAdapter(child: _promoBanner(homeData.promoBanners)),
 
-                              return _featuredAds(featuredListings);
-                            },
-                          ),
-                        ],
+              SliverToBoxAdapter(child: const SizedBox(height: 8)),
+
+              SliverToBoxAdapter(child: _dotsIndicator(homeData.promoBanners)),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+
+              SliverToBoxAdapter(child: _headings('Popular Categories')),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 12)),
+
+              ///SliverGrid directly (NO wrapper widget)
+              _categoriesTab(homeData.categories),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+
+              /// Featured ads section
+              SliverToBoxAdapter(
+                child: Container(
+                  padding: const EdgeInsets.only(bottom: 30, top: 20),
+                  color: AppColors.BLACK_12,
+                  child: Column(
+                    children: [
+                      _featuredAdsHeading(),
+                      const SizedBox(height: 12),
+                      FutureBuilder<List<Listing>>(
+                        future: _featuredListings,
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const CircularProgressIndicator();
+                          }
+                          if (snapshot.data!.isEmpty) {
+                            return const Text("No featured listings available");
+                          }
+
+                          return _featuredAds(snapshot.data!);
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    _headings('Newly Added'),
-                    const SizedBox(height: 20),
-                    FutureBuilder<List<Listing>>(
-                      future: _newAddedListings,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: 6,
-                            padding: const EdgeInsets.symmetric(horizontal: 15),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                  childAspectRatio: 3 / 3.9,
-                                ),
-                            itemBuilder:
-                                (context, index) =>
-                                    CommonWidgets.shimmerlistingCard(),
-                          );
-                        }
-                        if (snapshot.hasError) {
-                          return Text("Error: ${snapshot.error}");
-                        }
-
-                        final listings = snapshot.data ?? [];
-
-                        if (listings.isEmpty) {
-                          return const Text("No New listings available");
-                        }
-
-                        return _listingsData(listings);
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    _headings('Recommended'),
-                    const SizedBox(height: 20),
-                    FutureBuilder<List<Listing>>(
-                      future: _recommendedListings,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: 6,
-                            padding: const EdgeInsets.symmetric(horizontal: 15),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                  childAspectRatio: 3 / 3.9,
-                                ),
-                            itemBuilder:
-                                (context, index) =>
-                                    CommonWidgets.shimmerlistingCard(),
-                          );
-                        }
-                        if (snapshot.hasError) {
-                          return Text("Error: ${snapshot.error}");
-                        }
-
-                        final listings = snapshot.data ?? [];
-
-                        if (listings.isEmpty) {
-                          return const Text(
-                            "No recommended listings available",
-                          );
-                        }
-
-                        return _listingsData(listings);
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    _bannerData(homeData.banners[0].imageUrl),
-
-                    for (
-                      int index = 0;
-                      index < homeData.listings.length;
-                      index++
-                    ) ...[
-                      const SizedBox(height: 20),
-                      _headings(homeData.listings[index]),
-                      const SizedBox(height: 20),
-                      _listingsData(
-                        (listings
-                                .where(
-                                  (listing) =>
-                                      listing.category ==
-                                      homeData.listings[index],
-                                )
-                                .toList()
-                              ..sort((a, b) => b.rating.compareTo(a.rating)))
-                            .take(6)
-                            .toList(),
-                      ),
-                      const SizedBox(height: 20),
-                      _bannerData(homeData.banners[index + 1].imageUrl),
                     ],
-                  ]),
+                  ),
                 ),
               ),
 
-              //Footer tagline outside padding, full width
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+              SliverToBoxAdapter(child: _headings('Newly Added')),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+              listingsSliver(_newAddedListings),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+              SliverToBoxAdapter(child: _headings('Recommended')),
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+              listingsSliver(_recommendedListings),
+
+              for (int i = 0; i < homeData.listings.length; i++) ...[
+                ...categorySectionSlivers(homeData, i),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
+              ],
+
+              SliverToBoxAdapter(child: const SizedBox(height: 20)),
               SliverToBoxAdapter(child: CommonWidgets.footerTagline()),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _bannerData(String imageLink) {
+    return Container(
+      // padding: const EdgeInsets.symmetric(vertical: ),
+      width: double.infinity,
+      height: 250,
+      color: AppColors.GREY_SHADE_300,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(0),
+        child: CachedNetworkImage(
+          imageUrl: imageLink,
+          fit: BoxFit.cover,
+
+          placeholder: (context, url) {
+            return Shimmer.fromColors(
+              baseColor: AppColors.GREY_SHADE_300,
+              highlightColor: AppColors.GREY_SHADE_100,
+              child: Container(
+                width: double.infinity,
+                height: double.infinity,
+                color: AppColors.WHITE,
+              ),
+            );
+          },
+
+          errorWidget:
+              (context, url, error) => Container(
+                color: AppColors.GREY_SHADE_300,
+                child: const Icon(Icons.image, color: AppColors.GREY),
+              ),
+        ),
       ),
     );
   }
@@ -326,15 +318,12 @@ class _HomeScreenState extends State<HomeScreen> {
           final imageUrl = promoBanners[index].imageUrl;
           return GestureDetector(
             onTap: () {
-              final route = promoBanners[index].route ?? '';
+              final route = promoBanners[index].route;
               if (route.isNotEmpty) {
                 // Check if the route is a listing detail route
                 if (route.startsWith('/listing/')) {
                   final listingId = route.split('/').last; // extract '001'
-                  Navigator.pushNamed(
-                    context,
-                    '/listing/$listingId',
-                  );
+                  Navigator.pushNamed(context, '/listing/$listingId');
                 } else {
                   // Navigate to any other route directly
                   Navigator.pushNamed(context, route);
@@ -347,16 +336,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 imageUrl: imageUrl,
                 width: double.infinity,
                 fit: BoxFit.cover,
+                fadeInDuration: Duration.zero,
+                fadeOutDuration: Duration.zero,
                 placeholder: (context, url) {
-                  return Shimmer.fromColors(
-                    baseColor: AppColors.GREY_SHADE_300,
-                    highlightColor: AppColors.GREY_SHADE_100,
-                    child: Container(
-                      width: double.infinity,
-                      height: 180,
-                      color: AppColors.WHITE,
-                    ),
-                  );
+                  return Container(color: AppColors.GREY_SHADE_100);
                 },
                 errorWidget:
                     (context, url, error) => Container(
@@ -478,80 +461,78 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _categoriesTab(List<dynamic> categories) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: categories.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.8,
-      ),
-      itemBuilder: (context, index) {
-        final category = categories[index];
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder:
-                    (context) => ListingPage(
-                      title: category.category,
-                      query: FirebaseFirestore.instance
-                          .collection("listings")
-                          .where("category", isEqualTo: category.category)
-                          .where("verifiedBy", isNull: false)
-                          .orderBy("createdAt", descending: true),
-                    ),
-              ),
-            );
-          },
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                height: 60,
-                width: 60,
-                padding: EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.WHITE,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.GREY_SHADE_300),
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 0.8,
+        ),
+        delegate: SliverChildBuilderDelegate(childCount: categories.length, (
+          context,
+          index,
+        ) {
+          final category = categories[index];
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (context) => ListingPage(
+                        title: category.category,
+                        query: FirebaseFirestore.instance
+                            .collection("listings")
+                            .where("category", isEqualTo: category.category)
+                            .where("verifiedBy", isNull: false)
+                            .orderBy("createdAt", descending: true),
+                      ),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10), // match container
-                  child: CachedNetworkSvg(
-                    url: category.imageUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    // show your shimmer while loading
-                    placeholder: Shimmer.fromColors(
-                      baseColor: AppColors.GREY_SHADE_300,
-                      highlightColor: AppColors.GREY_SHADE_100,
-                      child: Container(color: AppColors.GREY_SHADE_300),
+              );
+            },
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  height: 60,
+                  width: 60,
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.WHITE,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.GREY_SHADE_300),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10), // match container
+                    child: CachedNetworkSvg(
+                      url: category.imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      placeholder: Container(color: AppColors.GREY_SHADE_100),
+                      errorWidget: const Icon(Icons.broken_image),
                     ),
-                    errorWidget: const Icon(Icons.broken_image),
                   ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                category.category,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.BLACK,
+                const SizedBox(height: 6),
+                Text(
+                  category.category,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.BLACK,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        }),
+      ),
     );
   }
 
@@ -632,6 +613,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: 140,
                       height: 180,
                       fit: BoxFit.cover,
+                      fadeInDuration: Duration.zero,
+                      fadeOutDuration: Duration.zero,
                     ),
                   ),
 
@@ -732,66 +715,67 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _listingsData(List<Listing> listings) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: listings.length,
-      padding: const EdgeInsets.symmetric(horizontal: 15),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 3 / 3.8,
-      ),
-      itemBuilder: (context, index) {
-        final listing = listings[index];
+  Widget listingsSliver(Future<List<Listing>> future) {
+    return FutureBuilder<List<Listing>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            sliver: SliverGrid(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => CommonWidgets.shimmerlistingCard(),
+                childCount: 6,
+              ),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 3 / 3.8,
+              ),
+            ),
+          );
+        }
 
-        return GestureDetector(
-          onTap: () {
-            CommonMethods.navigateToListingDetailScreen(
-              context,
-              listing,
-              listings,
-            );
-          },
-          child: CommonWidgets.listingCard(listing),
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: Text("No listings found")),
+            ),
+          );
+        }
+
+        final listings = snapshot.data!;
+
+        return SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          sliver: SliverGrid(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final listing = listings[index];
+                return GestureDetector(
+                  onTap: () {
+                    CommonMethods.navigateToListingDetailScreen(
+                      context,
+                      listing,
+                      listings,
+                    );
+                  },
+                  child: CommonWidgets.listingCard(listing),
+                );
+              },
+              childCount: listings.length, // ✅ SAFE
+            ),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 3 / 3.8,
+            ),
+          ),
         );
       },
-    );
-  }
-
-  Widget _bannerData(String imageLink) {
-    return Container(
-      // padding: const EdgeInsets.symmetric(vertical: ),
-      width: double.infinity,
-      height: 250,
-      color: AppColors.GREY_SHADE_300,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(0),
-        child: CachedNetworkImage(
-          imageUrl: imageLink,
-          fit: BoxFit.cover,
-
-          placeholder: (context, url) {
-            return Shimmer.fromColors(
-              baseColor: AppColors.GREY_SHADE_300,
-              highlightColor: AppColors.GREY_SHADE_100,
-              child: Container(
-                width: double.infinity,
-                height: double.infinity,
-                color: AppColors.WHITE,
-              ),
-            );
-          },
-
-          errorWidget:
-              (context, url, error) => Container(
-                color: AppColors.GREY_SHADE_300,
-                child: const Icon(Icons.image, color: AppColors.GREY),
-              ),
-        ),
-      ),
     );
   }
 }

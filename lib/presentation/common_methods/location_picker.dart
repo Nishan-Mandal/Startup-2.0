@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 

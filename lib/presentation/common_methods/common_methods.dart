@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ class CommonMethods {
     Listing listing,
     List<Listing> similarListings,
   ) {
+    preloadListingImages(context,listing);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -166,5 +168,11 @@ class CommonMethods {
       debugPrint("Error in reverse geocoding: $e");
     }
     return '';
+  }
+
+  static void preloadListingImages(BuildContext context, Listing listing) {
+    for (final img in listing.images) {
+      precacheImage(CachedNetworkImageProvider(img.fullUrl), context);
+    }
   }
 }

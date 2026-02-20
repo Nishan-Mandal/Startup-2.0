@@ -121,7 +121,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         await conversationRef.set({
           "conversationId": widget.conversationId,
           "type": "direct",
-          "initiatedBy": FirebaseAuth.instance.currentUser?.displayName??'',
+          "initiatedBy": FirebaseAuth.instance.currentUser?.displayName ?? '',
           "participantIds": [user.uid, widget.otherUserId],
           "participants": [
             {user.uid: userName ?? "You"},
@@ -159,7 +159,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final appUser = context.watch<AppAuthProvider>().appUser;
+    final appUser = context.read<AppAuthProvider>().appUser;
     return Scaffold(
       backgroundColor: AppColors.GREY_SHADE_50,
       appBar: AppBar(
@@ -318,7 +318,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   Widget _buildMessageBubble(m, isMe) {
-    final appUser = context.watch<AppAuthProvider>().appUser;
+    final appUser = context.read<AppAuthProvider>().appUser;
     // ---------------------- LISTING ATTACHMENT ----------------------
     if (m.attachments != null &&
         m.attachments.length > 0 &&
@@ -344,7 +344,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               maxRadius: 15,
               backgroundColor: AppColors.GREY_SHADE_300,
               child: Text(
-                widget.type == 'support' && appUser?.role != 'admin'? 'S':CommonMethods.getInitials(m.senderName ?? 'U'),
+                widget.type == 'support' && appUser?.role != 'admin'
+                    ? 'S'
+                    : CommonMethods.getInitials(m.senderName ?? 'U'),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -472,21 +474,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 
-  Widget _buildListingAttachmentBubble(
-    Listing listing,
-    bool isMe,
-    m,
-  ) {
+  Widget _buildListingAttachmentBubble(Listing listing, bool isMe, m) {
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder:
-                (context) =>
-                    ListingDetailScreen(listing: listing, similarListings: []),
-          ),
-        );
+        CommonMethods.navigateToListingDetailScreen(context, listing, []);
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -516,11 +507,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 ),
               ),
             ),
-             const SizedBox(height: 2),
-                Text(
-                  CommonMethods.formatMessageTime(m.createdAt),
-                  style: const TextStyle(fontSize: 10, color: AppColors.GREY),
-                ),
+            const SizedBox(height: 2),
+            Text(
+              CommonMethods.formatMessageTime(m.createdAt),
+              style: const TextStyle(fontSize: 10, color: AppColors.GREY),
+            ),
           ],
         ),
       ),

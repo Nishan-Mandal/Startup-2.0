@@ -1,6 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
@@ -18,7 +16,7 @@ import 'package:in_app_update/in_app_update.dart';
 
 class BottomNavScreen extends StatefulWidget {
   final int initialIndex;
-  const BottomNavScreen({this.initialIndex = 0, Key? key}) : super(key: key);
+  const BottomNavScreen({this.initialIndex = 0, super.key});
 
   @override
   State<BottomNavScreen> createState() => _BottomNavScreenState();
@@ -183,6 +181,7 @@ class _BottomNavScreenState extends State<BottomNavScreen>
                   ],
                   hasNotch: true,
                   currentIndex: navProvider.currentIndex,
+                  elevation: 0.0,
                   onTap: (index) {
                     if (index == navProvider.currentIndex) return;
                     navProvider.setIndex(index);

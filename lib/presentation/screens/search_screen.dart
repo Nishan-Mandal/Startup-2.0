@@ -144,8 +144,8 @@ class _SearchScreenState extends State<SearchScreen> {
               .map((doc) => Category.fromJson(doc.data()))
               .where(
                 (category) =>
-                    seenCategoryNames.add(category.name ?? '') &&
-                    (category.name?.toLowerCase().contains(lowerText) ?? false),
+                    seenCategoryNames.add(category.name) &&
+                    (category.name.toLowerCase().contains(lowerText)),
               )
               .toList();
 
@@ -155,7 +155,7 @@ class _SearchScreenState extends State<SearchScreen> {
               .map((doc) => Listing.fromJson(doc.data()))
               .where(
                 (listing) =>
-                    listing.name?.toLowerCase().contains(lowerText) ?? false,
+                    listing.name.toLowerCase().contains(lowerText),
               )
               .toList();
 

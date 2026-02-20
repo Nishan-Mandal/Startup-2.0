@@ -3,7 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/user_model.dart';
+import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
+import 'package:startup_20/presentation/screens/listing_map_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
 
@@ -273,6 +275,17 @@ class _ContributionScreenState extends State<ContributionScreen> {
                     alignment: Alignment.center,
                     child: TextButton(
                       onPressed: () {
+                        if (!AppAuthProvider.isAnonymousUser() &&
+                            currentUser?.role == 'admin') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ListingMapScreen(),
+                            ),
+                          );
+                          return;
+                        }
+
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(

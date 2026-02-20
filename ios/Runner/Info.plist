@@ -28,7 +28,8 @@
 	<string>remote-notification</string>
 	</array>
 
-
+	<key>GMSApiKey</key>
+	<string>AIzaSyBrWhs0x-66O88eOnlO-_1WztjU-QxOWBE</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
