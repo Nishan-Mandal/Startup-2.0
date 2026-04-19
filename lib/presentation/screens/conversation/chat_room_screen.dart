@@ -1,16 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/message_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
-import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
-import 'package:startup_20/providers/chat_provider.dart';
 
 class ChatRoomScreen extends StatefulWidget {
   final String conversationId;

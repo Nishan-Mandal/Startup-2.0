@@ -177,6 +177,32 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.GREY_SHADE_50,
+
+      floatingActionButton: FutureBuilder<HomeModel>(
+        future: _homeFuture,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const SizedBox();
+          }
+
+          final phone = snapshot.data!.whatsappSupport;
+
+          if (phone.isEmpty) {
+            return const SizedBox();
+          }
+
+          return FloatingActionButton(
+            backgroundColor: AppColors.THEME_COLOR,
+            onPressed: () => CommonMethods.openWhatsApp(phone),
+            child: const Icon(
+              Icons.support_agent,
+              color: Colors.white,
+              size: 30,
+            ),
+          );
+        },
+      ),
+
       body: FutureBuilder<HomeModel>(
         future: _homeFuture,
         builder: (context, snapshot) {

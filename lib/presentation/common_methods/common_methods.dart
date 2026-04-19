@@ -10,6 +10,7 @@ import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CommonMethods {
   static final _firestore = FirebaseFirestore.instance;
@@ -173,6 +174,26 @@ class CommonMethods {
   static void preloadListingImages(BuildContext context, Listing listing) {
     for (final img in listing.images) {
       precacheImage(CachedNetworkImageProvider(img.fullUrl), context);
+    }
+  }
+
+  static void openWhatsApp(String phone) async {
+    // Remove spaces, dashes, brackets etc.
+    String normalized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+
+    // Add country code if missing (India +91)
+    if (!normalized.startsWith('+')) {
+      if (normalized.length == 10) {
+        normalized = '91$normalized';
+      }
+    } else {
+      normalized = normalized.replaceFirst('+', '');
+    }
+
+    final Uri url = Uri.parse('https://wa.me/$normalized');
+
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch WhatsApp');
     }
   }
 }
