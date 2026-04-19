@@ -69,7 +69,6 @@ class _LocationPickerState extends State<LocationPicker> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -94,11 +93,12 @@ class _LocationPickerState extends State<LocationPicker> {
                     },
                     onCameraIdle: () async {
                       if (_currentLatLng != null) {
-                        _addressController.text = await CommonMethods.getAddressFromLatLng(_currentLatLng!);
-                      if (!mounted) return;
-                        setState(() {
-                          
-                        });
+                        _addressController
+                            .text = await CommonMethods.getAddressFromLatLng(
+                          _currentLatLng!,
+                        );
+                        if (!mounted) return;
+                        setState(() {});
                       }
                     },
                     myLocationEnabled: true,
@@ -144,7 +144,7 @@ class _LocationPickerState extends State<LocationPicker> {
                                 color: Colors.white,
                                 child: TextFormField(
                                   controller: _addressController,
-                                  readOnly: true,
+                                  readOnly: false,
                                   decoration: const InputDecoration(
                                     labelText: "*Address",
                                     border: OutlineInputBorder(),
@@ -158,13 +158,20 @@ class _LocationPickerState extends State<LocationPicker> {
                         SafeArea(
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              Navigator.pop(context, _currentLatLng);
+                              Address address = Address(latLng: _currentLatLng!, addressText: _addressController.text);
+                              Navigator.pop(context, address);
                             },
-                            icon: const Icon(Icons.check,color: AppColors.WHITE,),
-                            label: const Text('Confirm Location', style: TextStyle(color: AppColors.WHITE),),
+                            icon: const Icon(
+                              Icons.check,
+                              color: AppColors.WHITE,
+                            ),
+                            label: const Text(
+                              'Confirm Location',
+                              style: TextStyle(color: AppColors.WHITE),
+                            ),
                             style: ElevatedButton.styleFrom(
                               minimumSize: const Size.fromHeight(45),
-                              backgroundColor: AppColors.THEME_COLOR
+                              backgroundColor: AppColors.THEME_COLOR,
                             ),
                           ),
                         ),
@@ -175,4 +182,11 @@ class _LocationPickerState extends State<LocationPicker> {
               ),
     );
   }
+}
+
+class Address {
+  LatLng latLng;
+  String addressText;
+
+  Address({required this.latLng, required this.addressText});
 }

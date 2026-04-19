@@ -47,6 +47,16 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   bool _isLiked = false;
   int _likes = 0;
 
+  static const List<String> weekDays = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+
   bool _isFavorite = false;
   final TextEditingController _reviewController = TextEditingController();
 
@@ -364,8 +374,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         ),
       ];
 
-      debugPrint(widget.listing.openHours.toString());
-
       // ⭐ MODIFIED — create Listing model
       final listing = Listing(
         listingId: listingId,
@@ -376,6 +384,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         details: widget.listing.details,
         geo: widget.listing.geo,
         phone: widget.listing.phone,
+        email: widget.listing.email,
+        alternatePhone: widget.listing.alternatePhone,
         category: widget.listing.category,
         categoryId: widget.listing.categoryId,
         tags: widget.listing.tags,
@@ -395,10 +405,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         since: widget.listing.since,
         likes: widget.listing.likes,
         views: widget.listing.views,
+        isPremium: false,
         social: widget.listing.social,
         ratingStats: widget.listing.ratingStats,
         factorAvgRatings: widget.listing.factorAvgRatings,
-        openHours: widget.listing.openHours,
+        businessHours: widget.listing.businessHours,
       );
 
       //Update or Create
@@ -771,6 +782,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           if (imageCount > 1) _buildDotsIndicator(listing, imageCount),
           if (imageCount > 1) _buildImageCounter(imageCount),
           _buildEstablishText(),
+
+          if (listing.isPremium) _buildPremiumUserTag(),
         ],
       ),
     );
@@ -838,7 +851,29 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     );
   }
 
+  Widget _buildPremiumUserTag() {
+    return Positioned(
+      top: 10,
+      right: 10,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.amber,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: const Icon(
+          Icons.workspace_premium,
+          size: 20,
+          color: Colors.black,
+        ),
+      ),
+    );
+  }
+
   Widget _buildListingInfo(Listing listing) {
+    final today = weekDays[DateTime.now().weekday - 1];
+    final todaySchedule = listing.businessHours[today];
+    final bool isOpenNow = _isOpenNow(todaySchedule);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Row(
@@ -872,6 +907,32 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     style: const TextStyle(color: AppColors.GREY),
                   ),
                 ],
+              ),
+
+              /// 🔥 OPEN NOW STATUS
+              Visibility(
+                visible: todaySchedule != null,
+                child: Row(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 2),
+                      child: Icon(
+                        Icons.circle,
+                        size: 12,
+                        color: isOpenNow ? Colors.green : Colors.red,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      isOpenNow ? "Open Now" : "Closed",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: isOpenNow ? Colors.green : Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -948,7 +1009,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             if (listing.social['WhatsApp'] != null)
               _socialIcon(
                 imagePath: 'assets/images/whatsapp.svg',
-                onTap: () => _openWhatsApp(listing.social['WhatsApp'] ?? ''),
+                onTap:
+                    () => CommonMethods.openWhatsApp(
+                      listing.social['WhatsApp'] ?? '',
+                    ),
               ),
 
             // 📘 Facebook
@@ -1028,26 +1092,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  void _openWhatsApp(String phone) async {
-    // Remove spaces, dashes, brackets etc.
-    String normalized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-
-    // Add country code if missing (India +91)
-    if (!normalized.startsWith('+')) {
-      if (normalized.length == 10) {
-        normalized = '91$normalized';
-      }
-    } else {
-      normalized = normalized.replaceFirst('+', '');
-    }
-
-    final Uri url = Uri.parse('https://wa.me/$normalized');
-
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      debugPrint('Could not launch WhatsApp');
-    }
-  }
-
   Widget _buildSellerSection(Listing listing) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -1066,7 +1110,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                listing.ownerName,
+                listing.ownerName.length > 16
+                    ? '${listing.ownerName.substring(0, 16)}...'
+                    : listing.ownerName,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -1417,10 +1463,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     );
   }
 
-  Widget _buildOpenHoursTable(Listing listing) {
-    if (listing.openHours.isEmpty) {
-      return SizedBox();
-    }
+  Widget _buildOpenHoursSection(Listing listing) {
+    if (listing.businessHours.isEmpty) return const SizedBox();
+
+    final today = weekDays[DateTime.now().weekday - 1];
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),
       child: Column(
@@ -1432,23 +1479,23 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
+
           const SizedBox(height: 12),
 
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.GREY_SHADE_300, width: 1),
+              border: Border.all(color: AppColors.GREY_SHADE_300),
             ),
             child: Table(
               border: TableBorder.all(color: Colors.grey.shade300),
-              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
               columnWidths: const {
                 0: FlexColumnWidth(2),
-                1: FlexColumnWidth(2),
-                2: FlexColumnWidth(2),
+                1: FlexColumnWidth(3),
               },
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
               children: [
-                /// Header
+                /// HEADER
                 const TableRow(
                   decoration: BoxDecoration(color: Color(0xFFF5F5F5)),
                   children: [
@@ -1465,16 +1512,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       padding: EdgeInsets.all(8),
                       child: Center(
                         child: Text(
-                          "Open",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Center(
-                        child: Text(
-                          "Close",
+                          "Hours",
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -1482,42 +1520,94 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   ],
                 ),
 
-                /// Rows
-                ...listing.openHours.entries.map((entry) {
-                  final day = entry.key;
-                  final hours = entry.value;
+                /// ONE ROW PER DAY
+                ...weekDays.map((day) {
+                  final schedule = listing.businessHours[day];
+                  final bool isToday = day == today;
 
                   return TableRow(
                     children: [
+                      /// DAY CELL
                       Padding(
                         padding: const EdgeInsets.all(8),
-                        child: Center(child: Text(day)),
-                      ),
-
-                      /// Open Time
-                      Padding(
-                        padding: const EdgeInsets.all(6),
                         child: Center(
-                          child: Text(hours.closed ? 'Closed' : hours.close),
+                          child: Text(
+                            day,
+                            style: TextStyle(
+                              fontWeight:
+                                  isToday ? FontWeight.bold : FontWeight.w500,
+                              color:
+                                  isToday
+                                      ? AppColors.THEME_COLOR
+                                      : Colors.black,
+                            ),
+                          ),
                         ),
                       ),
 
-                      /// Close Time
+                      /// HOURS CELL
                       Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Center(
-                          child: Text(hours.closed ? 'Closed' : hours.close),
-                        ),
+                        padding: const EdgeInsets.all(8),
+                        child:
+                            schedule == null || schedule.isClosed
+                                ? const Center(
+                                  child: Text(
+                                    "Closed",
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                )
+                                : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children:
+                                      schedule.slots.map((slot) {
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 2,
+                                          ),
+                                          child: Text(
+                                            "${_formatTime(slot.open)} – ${_formatTime(slot.close)}",
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                ),
                       ),
                     ],
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? "AM" : "PM";
+    return "$hour:$minute $period";
+  }
+
+  bool _isOpenNow(DaySchedule? schedule) {
+    if (schedule == null || schedule.isClosed) return false;
+
+    final now = TimeOfDay.now();
+
+    for (var slot in schedule.slots) {
+      final openMinutes = slot.open.hour * 60 + slot.open.minute;
+      final closeMinutes = slot.close.hour * 60 + slot.close.minute;
+      final nowMinutes = now.hour * 60 + now.minute;
+
+      if (nowMinutes >= openMinutes && nowMinutes <= closeMinutes) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   Widget _buildReviews(Listing listing) {
@@ -1807,6 +1897,31 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       return const SizedBox();
     }
 
+    if (details.isEmpty) {
+      return const SizedBox();
+    }
+
+    // ✅ Step 1: Filter valid entries
+    final validEntries =
+        details.entries.where((e) {
+          final value = e.value;
+
+          // Case 1: Direct null
+          if (value == null) return false;
+
+          // Case 2: Map with all null values
+          if (value is Map) {
+            return value.values.any((v) => v != null);
+          }
+
+          return true;
+        }).toList();
+
+    // ✅ Step 2: If nothing valid → hide entire section
+    if (validEntries.isEmpty) {
+      return const SizedBox();
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),
       child: Column(
@@ -1845,7 +1960,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   ),
                   children: const [
                     Padding(
-                      padding: EdgeInsets.all(12),
+                      padding: EdgeInsets.all(8),
                       child: Center(
                         child: Text(
                           "Details",
@@ -1857,7 +1972,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.all(12),
+                      padding: EdgeInsets.all(8),
                       child: Center(
                         child: Text(
                           "Info",
@@ -1872,64 +1987,82 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 ),
 
                 /// 🔹 Data Rows
-                ...details.entries.map((e) {
-                  final key = e.key;
-                  final formattedValue = formatValue(e.value, e.key);
+                ...details.entries
+                    .where((e) {
+                      final value = e.value;
 
-                  return TableRow(
-                    children: [
-                      // Key column
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          key,
-                          style: const TextStyle(
-                            color: AppColors.BLACK,
-                            fontSize: 14,
+                      // Case 1: Direct null
+                      if (value == null) return false;
+
+                      // Case 2: Map with all null values (like {min: null, max: null})
+                      if (value is Map) {
+                        return value.values.any((v) => v != null);
+                      }
+
+                      return true;
+                    })
+                    .map((e) {
+                      final key = e.key;
+                      final formattedValue = formatValue(e.value, e.key);
+
+                      debugPrint(formattedValue);
+
+                      return TableRow(
+                        children: [
+                          // Key column
+                          Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Text(
+                              key,
+                              style: const TextStyle(
+                                color: AppColors.BLACK,
+                                fontSize: 14,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
 
-                      // Value column
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child:
-                            isURL(formattedValue)
-                                ? GestureDetector(
-                                  onTap: () async {
-                                    final uri = Uri.parse(
-                                      formattedValue.startsWith("http")
-                                          ? formattedValue
-                                          : "https://$formattedValue",
-                                    );
-                                    await launchUrl(
-                                      uri,
-                                      mode: LaunchMode.externalApplication,
-                                    );
-                                  },
-                                  child: Text(
-                                    formattedValue,
-                                    style: const TextStyle(
-                                      color: Colors.blue,
-                                      fontSize: 14,
-                                      decoration: TextDecoration.underline,
+                          // Value column
+                          Padding(
+                            padding: const EdgeInsets.all(12),
+                            child:
+                                isURL(formattedValue)
+                                    ? GestureDetector(
+                                      onTap: () async {
+                                        final uri = Uri.parse(
+                                          formattedValue.startsWith("http")
+                                              ? formattedValue
+                                              : "https://$formattedValue",
+                                        );
+                                        await launchUrl(
+                                          uri,
+                                          mode: LaunchMode.externalApplication,
+                                        );
+                                      },
+                                      child: Text(
+                                        formattedValue,
+                                        style: const TextStyle(
+                                          color: Colors.blue,
+                                          fontSize: 14,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                    )
+                                    : Text(
+                                      formattedValue,
+                                      style: const TextStyle(
+                                        color: AppColors.GREY,
+                                        fontSize: 14,
+                                      ),
                                     ),
-                                  ),
-                                )
-                                : Text(
-                                  formattedValue,
-                                  style: const TextStyle(
-                                    color: AppColors.GREY,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                      ),
-                    ],
-                  );
-                }).toList(),
+                          ),
+                        ],
+                      );
+                    })
+                    .toList(),
               ],
             ),
           ),
+           const Divider(height: 30),
         ],
       ),
     );
@@ -2143,21 +2276,15 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   child: const Divider(height: 30),
                 ),
                 _buildSellerSection(listing),
-                Padding(
+
+                                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: const Divider(height: 30),
                 ),
 
-                _buildOpenHoursTable(listing),
+                _buildOpenHoursSection(listing),
 
                 _buildDetailsTable(listing.details),
-
-                if (listing.details.isNotEmpty) const SizedBox(height: 10),
-                if (listing.details.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: const Divider(height: 30),
-                  ),
 
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16.0),

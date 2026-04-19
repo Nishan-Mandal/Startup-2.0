@@ -25,7 +25,6 @@ class ListingMapScreen extends StatefulWidget {
 }
 
 class _ListingMapScreenState extends State<ListingMapScreen> {
-  GoogleMapController? _mapController;
   Set<Marker> _markers = {};
   Listing? _selectedListing;
 
@@ -69,7 +68,7 @@ class _ListingMapScreenState extends State<ListingMapScreen> {
   }
 
   void _listenListings() {
-    FirebaseFirestore.instance.collection('listings').where("verifiedBy", isNull: false).snapshots().listen((
+    FirebaseFirestore.instance.collection('listings').snapshots().listen((
       snapshot,
     ) async {
       _allListings =
@@ -222,7 +221,7 @@ Future<void> _loadCustomMarkers(List<Listing> listings) async {
     final img = await picture.toImage(size, size);
     final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
 
-    final descriptor = BitmapDescriptor.fromBytes(
+    final descriptor = BitmapDescriptor.bytes(
       byteData!.buffer.asUint8List(),
     );
 
@@ -245,7 +244,7 @@ Future<void> _loadCustomMarkers(List<Listing> listings) async {
               zoom: 9,
             ),
             markers: _markers,
-            onMapCreated: (controller) => _mapController = controller,
+            onMapCreated: (controller) => controller,
             onTap: (_) => setState(() => _selectedListing = null),
           ),
 

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
-import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/bottom_nav_screen.dart';
 import 'package:startup_20/presentation/screens/legal_page_screen.dart';

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
-import 'package:startup_20/presentation/screens/listing_map_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/notification_screen.dart';
 import 'package:startup_20/presentation/screens/profile_screen.dart';
@@ -278,28 +277,54 @@ class CommonWidgets {
           // 🔹 Image
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: CachedNetworkImage(
-              imageUrl:
-                  listing.images.isNotEmpty
-                      ? (listing.images.first.thumbUrl.isNotEmpty
-                          ? listing.images.first.thumbUrl
-                          : listing.images.first.fullUrl)
-                      : "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/static%2FImage_Placeholder.jpg?alt=media&token=22a0ec73-6352-4885-bfaf-c485750af28f",
-              height: 100,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorWidget:
-                  (_, __, ___) => Container(
-                    height: 100,
-                    width: double.infinity,
-                    color: AppColors.GREY_SHADE_300,
-                    child: const Icon(
-                      Icons.image_not_supported,
-                      color: AppColors.GREY,
+            child: Stack(
+              children: [
+                CachedNetworkImage(
+                  imageUrl:
+                      listing.images.isNotEmpty
+                          ? (listing.images.first.thumbUrl.isNotEmpty
+                              ? listing.images.first.thumbUrl
+                              : listing.images.first.fullUrl)
+                          : "https://firebasestorage.googleapis.com/v0/b/startup20-5eaa7.firebasestorage.app/o/static%2FImage_Placeholder.jpg?alt=media&token=22a0ec73-6352-4885-bfaf-c485750af28f",
+                  height: 100,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorWidget:
+                      (_, __, ___) => Container(
+                        height: 100,
+                        width: double.infinity,
+                        color: AppColors.GREY_SHADE_300,
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          color: AppColors.GREY,
+                        ),
+                      ),
+                  fadeInDuration: Duration.zero,
+                  fadeOutDuration: Duration.zero,
+                ),
+
+                // ✅ Premium Badge
+                if (listing.isPremium == true)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.amber,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.workspace_premium,
+                        size: 14,
+                        color: Colors.black,
+                      ),
                     ),
                   ),
-              fadeInDuration: Duration.zero,
-              fadeOutDuration: Duration.zero,
+              ],
             ),
           ),
 

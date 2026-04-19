@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 
 class Listing {
   final String listingId;
@@ -11,6 +12,8 @@ class Listing {
   final Map<String, dynamic> details;
   final Geo geo;
   final String phone;
+  final String alternatePhone;
+  final String email;
   final String category;
   final String categoryId;
   final List<String> tags;
@@ -31,10 +34,11 @@ class Listing {
   final int since;
   int likes; //Keeping is non final for UI optimisation
   final int views;
+  final bool isPremium;
   final Map<String, String> social;
-  final Map<String, int> ratingStats; // NEW
-  final Map<String, double> factorAvgRatings; // NEW
-  final Map<String, OpenHours> openHours;
+  final Map<String, int> ratingStats;
+  final Map<String, double> factorAvgRatings;
+  final Map<String, DaySchedule> businessHours;
 
   Listing({
     required this.listingId,
@@ -45,6 +49,8 @@ class Listing {
     required this.details,
     required this.geo,
     required this.phone,
+    required this.alternatePhone,
+    required this.email,
     required this.category,
     required this.categoryId,
     required this.tags,
@@ -65,10 +71,11 @@ class Listing {
     required this.since,
     required this.likes,
     required this.views,
+    required this.isPremium,
     required this.social,
     required this.ratingStats,
     required this.factorAvgRatings,
-    required this.openHours,
+    required this.businessHours,
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) {
@@ -84,6 +91,8 @@ class Listing {
               : {},
       geo: Geo.fromJson(json['geo'] ?? {}),
       phone: json['phone'] ?? '',
+      alternatePhone: json['alternatePhone'] ?? '',
+      email: json['email'] ?? '',
       category: json['category'] ?? '',
       categoryId: json['categoryId'] ?? '',
       tags: List<String>.from(json['tags'] ?? []),
@@ -106,6 +115,7 @@ class Listing {
       since: json['since'] ?? 2025,
       likes: json['likes'] ?? 0,
       views: json['views'] ?? 0,
+      isPremium: json['isPremium'] ?? false,
       social:
           json['social'] != null
               ? Map<String, String>.from(json['social'])
@@ -123,9 +133,12 @@ class Listing {
           ) ??
           {},
 
-      openHours:
-          (json['openHours'] as Map<String, dynamic>?)?.map(
-            (day, value) => MapEntry(day, OpenHours.fromJson(value)),
+      businessHours:
+          (json['businessHours'] as Map<String, dynamic>?)?.map(
+            (day, value) => MapEntry(
+              day,
+              DaySchedule.fromJson(Map<String, dynamic>.from(value)),
+            ),
           ) ??
           {},
     );
@@ -141,6 +154,8 @@ class Listing {
       'details': details,
       'geo': geo.toJson(),
       'phone': phone,
+      'email': email,
+      'alternatePhone': alternatePhone,
       'category': category,
       'categoryId': categoryId,
       'tags': tags,
@@ -159,7 +174,9 @@ class Listing {
       // 'likes': likes,
       // 'views': views,
       'social': social,
-      'openHours': openHours.map((day, hours) => MapEntry(day, hours.toJson())),
+      'businessHours': businessHours.map(
+        (day, schedule) => MapEntry(day, schedule.toJson()),
+      ),
     };
   }
 }
@@ -175,12 +192,12 @@ class Geo {
       return Geo(lat: 0.0, lng: 0.0);
     }
 
-    // ✅ Handle Firestore GeoPoint
+    // Handle Firestore GeoPoint
     if (json is GeoPoint) {
       return Geo(lat: json.latitude, lng: json.longitude);
     }
 
-    // ✅ Handle Map {lat, lng} (string, int, double)
+    // Handle Map {lat, lng} (string, int, double)
     if (json is Map<String, dynamic>) {
       double parse(dynamic value) {
         if (value is int) return value.toDouble();
@@ -226,26 +243,57 @@ class ImageFile {
   };
 }
 
-class OpenHours {
-  final String open;
-  final String close;
-  final bool closed;
+class TimeSlot {
+  TimeOfDay open;
+  TimeOfDay close;
 
-  OpenHours({required this.open, required this.close, required this.closed});
+  TimeSlot({required this.open, required this.close});
 
-  factory OpenHours.fromJson(Map<String, dynamic>? json) {
-    if (json == null) {
-      return OpenHours(open: '', close: '', closed: true);
-    }
-
-    return OpenHours(
-      open: json['open'] ?? '',
-      close: json['close'] ?? '',
-      closed: json['closed'] ?? false,
+  factory TimeSlot.fromJson(Map<String, dynamic> json) {
+    return TimeSlot(
+      open: _parseTime(json['open']),
+      close: _parseTime(json['close']),
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'open': open, 'close': close, 'closed': closed};
+    return {"open": _formatTime(open), "close": _formatTime(close)};
+  }
+
+  static TimeOfDay _parseTime(String time) {
+    final parts = time.split(":");
+    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+  }
+
+  static String _formatTime(TimeOfDay time) {
+    return "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+  }
+}
+
+class DaySchedule {
+  bool isClosed;
+  List<TimeSlot> slots;
+
+  DaySchedule({required this.isClosed, required this.slots});
+
+  factory DaySchedule.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return DaySchedule(isClosed: true, slots: []);
+    }
+
+    return DaySchedule(
+      isClosed: json['isClosed'] ?? false,
+      slots:
+          (json['slots'] as List<dynamic>? ?? [])
+              .map((e) => TimeSlot.fromJson(Map<String, dynamic>.from(e)))
+              .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      "isClosed": isClosed,
+      "slots": slots.map((e) => e.toJson()).toList(),
+    };
   }
 }

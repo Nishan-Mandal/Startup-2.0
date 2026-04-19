@@ -52,14 +52,24 @@ class NotificationService {
 
     // 🔹 When tapped (background → foreground)
     FirebaseMessaging.onMessageOpenedApp.listen((message) async {
-      _handleNavigation(message.data as String?);
+      _handleNavigation(
+        jsonEncode({
+          'route': message.data['route'],
+          'listingId': message.data['listingId'],
+        }),
+      );
       await _saveNotificationToFirestore(message);
     });
 
     // 🔹 When opened from terminated state
     final initialMessage = await firebaseMessaging.getInitialMessage();
     if (initialMessage != null) {
-      _handleNavigation(initialMessage.data as String?);
+      _handleNavigation(
+        jsonEncode({
+          'route': initialMessage.data['route'],
+          'listingId': initialMessage.data['listingId'],
+        }),
+      );
       await _saveNotificationToFirestore(initialMessage);
     }
 
@@ -85,9 +95,12 @@ class NotificationService {
       android: androidDetails,
       iOS: iosDetails,
     );
+    final notificationId = DateTime.now().millisecondsSinceEpoch.remainder(
+      100000,
+    );
 
     await _localNotifications.show(
-      0,
+      notificationId,
       message.notification?.title ?? "Notification",
       message.notification?.body ?? "",
       notificationDetails,

@@ -24,7 +24,7 @@ Future<void> main() async {
     persistenceEnabled: true,
   );
   await NotificationService.initialize();
-
+  
   runApp(
     MultiProvider(
       providers: [
@@ -54,6 +54,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/notifications': (context) => const NotificationsScreen(),
         '/chatScreen': (context) => const BottomNavScreen(initialIndex: 3),
+        '/home': (context) => const BottomNavScreen(initialIndex: 0),
 
         // const ListingDetailScreen(listing: listing, similarListings: similarListings),
       },

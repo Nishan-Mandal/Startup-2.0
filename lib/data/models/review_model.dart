@@ -7,15 +7,6 @@ class Review {
 
   /// Overall / average rating
   final double rating;
-
-  /// Multi-factor ratings (NEW)
-  /// Example:
-  /// {
-  ///   "behaviour": 4,
-  ///   "quality": 5,
-  ///   "value": 4,
-  ///   "overall": 5
-  /// }
   final Map<String, double> factorRatings;
 
   final String comment;

@@ -1,17 +1,29 @@
 class CategoryFieldSchema {
-  static const Map<String, dynamic> commonFields = {
+
+  static const Map<String, dynamic> basicFields = {
     "formSchema": [
       {"label": "Shop/Service Name", "type": "string"},
       {"label": "Owners Name", "type": "string"},
-      {"label": "Phone", "type": "string", "keyboardType": "number"},
-
-      {"label": "Since", "type": "string", "keyboardType": "number"},
-      {"label": "Email", "type": "string", "keyboardType": "email"},
-
-      {"label": "Description", "type": "string", "keyboardType": "multiline"},
-      {"label": "Accept Online Payments", "type": "boolean"},
     ],
   };
+
+  static const Map<String, dynamic> contactFields = {
+    "formSchema": [
+      {"label": "Phone", "type": "string", "keyboardType": "number"},
+      {"label": "Alternate Phone (Optional)", "type": "string", "keyboardType": "number"},
+      {"label": "Email", "type": "string", "keyboardType": "email"},
+    ],
+  };
+
+  static const Map<String, dynamic> detailedFields = {
+    "formSchema": [
+      {"label": "Since", "type": "string", "keyboardType": "number"},
+      {"label": "Description", "type": "string", "keyboardType": "multiline"},
+      {"label": "Accept Online Payments", "type": "boolean"}
+    ],
+  };
+
+
 
   static const Map<String, dynamic> socialFields = {
     "formSchema": [

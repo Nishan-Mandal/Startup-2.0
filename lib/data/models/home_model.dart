@@ -34,6 +34,7 @@ class HomeModel {
   final List<Category> categories;
   final List<String> listings;
   final List<BannerModel> banners;
+  final String whatsappSupport;
 
   HomeModel({
     required this.active,
@@ -41,6 +42,7 @@ class HomeModel {
     required this.categories,
     required this.listings,
     required this.banners,
+    required this.whatsappSupport,
   });
 
   factory HomeModel.fromJson(Map<String, dynamic> json) {
@@ -59,6 +61,7 @@ class HomeModel {
           (json['banners'] as List<dynamic>? ?? [])
               .map((b) => BannerModel.fromJson(Map<String, dynamic>.from(b)))
               .toList(),
+      whatsappSupport: json['whatsappSupport'] ?? "",
     );
   }
 
