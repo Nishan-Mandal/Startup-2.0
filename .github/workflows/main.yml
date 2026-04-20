@@ -56,6 +56,11 @@ jobs:
         run: flutter build apk --release --split-per-abi
 
       # ✅ Build iOS (no signing)
+      - name: Install CocoaPods dependencies
+        run: |
+          cd ios
+          pod install --repo-update
+
       - name: Build iOS
         run: |
           flutter build ios --no-codesign
