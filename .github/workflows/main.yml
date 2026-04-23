@@ -1,3 +1,6 @@
+permissions:
+  contents: write
+
 on:
   pull_request:
     branches:
@@ -59,6 +62,12 @@ jobs:
       - run: flutter build appbundle --release
 
       # ✅ Build iOS (no signing)
+      - name: Install CocoaPods dependencies
+        run: |
+          cd ios
+          rm -rf Pods Podfile.lock
+          pod install --repo-update
+
       - name: Build iOS
         run: |
           flutter build ios --no-codesign
@@ -75,4 +84,4 @@ jobs:
         with:
           artifacts: "build/app/outputs/apk/release/*,build/app/outputs/bundle/release/*.aab,build/ios/iphoneos/app.ipa"
           tag: v1.0.${{ github.run_number }}
-          token: ${{ secrets.TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
