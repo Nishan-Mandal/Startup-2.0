@@ -99,12 +99,12 @@ class Listing {
       addedBy: json['addedBy'] ?? '',
       updatedBy: json['updatedBy'] ?? '',
       isClaimed: json['isClaimed'] ?? false,
-      ownerId: json['ownerId'],
+      ownerId: json['ownerId'] ?? '',
       ownerName: json['ownerName'] ?? 'Unknown',
       claimStatus: json['claimStatus'] ?? 'unclaimed',
-      verifiedBy: json['verifiedBy'],
-      createdAt: (json['createdAt'] as Timestamp).toDate(),
-      updatedAt: (json['updatedAt'] as Timestamp).toDate(),
+      verifiedBy: json['verifiedBy'] ?? '',
+      createdAt: _parseDate(json['createdAt']),
+      updatedAt: _parseDate(json['updatedAt']),
       images:
           (json['images'] as List<dynamic>? ?? [])
               .map((e) => ImageFile.fromJson(e))
@@ -296,4 +296,20 @@ class DaySchedule {
       "slots": slots.map((e) => e.toJson()).toList(),
     };
   }
+}
+
+DateTime _parseDate(dynamic value) {
+  if (value == null) return DateTime.now();
+
+  if (value is Timestamp) return value.toDate();
+
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+
+  if (value is String) {
+    return DateTime.tryParse(value) ?? DateTime.now();
+  }
+
+  return DateTime.now();
 }

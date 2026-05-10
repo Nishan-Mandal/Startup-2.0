@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/core/services/algolia_service.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/category_model.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
@@ -73,10 +74,10 @@ class _SearchScreenState extends State<SearchScreen> {
   Future<void> _search(String text) async {
     if (text.isEmpty) {
       setState(() {
-        isLoading = false;
         query = "";
-        categoryResults = [];
         listingResults = [];
+        categoryResults = [];
+        isLoading = false;
       });
       return;
     }
@@ -84,97 +85,71 @@ class _SearchScreenState extends State<SearchScreen> {
     setState(() {
       isLoading = true;
       query = text;
-      categoryResults = [];
-      listingResults = [];
     });
 
     try {
-      final capitalized = text[0].toUpperCase() + text.substring(1);
-      final lowerText = text.toLowerCase();
+      // 🔹 Parallel search
+      final results = await Future.wait([
+        AlgoliaService.searchListings(text),
+        AlgoliaService.searchCategories(text),
+      ]);
 
-      final categoryByTags =
-          await FirebaseFirestore.instance
-              .collection("categories")
-              .where(
-                "tags",
-                arrayContainsAny: [
-                  text,
-                  text.toLowerCase(),
-                  text.toUpperCase(),
-                  capitalized,
-                ],
-              )
-              .get();
+      final listingHits = results[0];
+      final categoryHits = results[1];
 
-      final categoryByName =
-          await FirebaseFirestore.instance
-              .collection("categories")
-              .where("name", isGreaterThanOrEqualTo: capitalized)
-              .where("name", isLessThan: capitalized + '\uf8ff')
-              .get();
-
-      final listingByTags =
-          await FirebaseFirestore.instance
-              .collection("listings")
-              .where("verifiedBy", isNull: false)
-              .where(
-                "tags",
-                arrayContainsAny: [
-                  text,
-                  text.toLowerCase(),
-                  text.toUpperCase(),
-                  capitalized,
-                ],
-              )
-              .get();
-
-      final listingByName =
-          await FirebaseFirestore.instance
-              .collection("listings")
-              .where("verifiedBy", isNull: false)
-              .where("name", isGreaterThanOrEqualTo: capitalized)
-              .where("name", isLessThan: capitalized + '\uf8ff')
-              .get();
-
-      final seenCategoryNames = <String>{};
-      final seenListingIds = <String>{};
-
-      final allCategories =
-          [...categoryByTags.docs, ...categoryByName.docs]
-              .map((doc) => Category.fromJson(doc.data()))
-              .where(
-                (category) =>
-                    seenCategoryNames.add(category.name) &&
-                    (category.name.toLowerCase().contains(lowerText)),
-              )
+      // 🔹 Extract listing IDs
+      final ids =
+          listingHits
+              .map((e) => e['objectID']?.toString())
+              .where((id) => id != null && id.isNotEmpty)
+              .cast<String>()
               .toList();
 
-      final allListings =
-          [...listingByTags.docs, ...listingByName.docs]
-              .where((doc) => seenListingIds.add(doc.id))
-              .map((doc) => Listing.fromJson(doc.data()))
-              .where(
-                (listing) =>
-                    listing.name.toLowerCase().contains(lowerText),
-              )
+      // 🔹 Fetch listings from Firestore
+      List<Listing> fetchedListings = [];
+
+      for (int i = 0; i < ids.length; i += 10) {
+        final chunk = ids.sublist(i, i + 10 > ids.length ? ids.length : i + 10);
+
+        final snapshot =
+            await FirebaseFirestore.instance
+                .collection("listings")
+                .where(FieldPath.documentId, whereIn: chunk)
+                .get();
+
+        final listingsChunk =
+            snapshot.docs.map((doc) {
+              final data = doc.data();
+              data['listingId'] = doc.id; // 🔥 IMPORTANT
+              return Listing.fromJson(data);
+            }).toList();
+
+        fetchedListings.addAll(listingsChunk);
+      }
+
+      // 🔹 Maintain order
+      final listingMap = {
+        for (var item in fetchedListings) item.listingId: item,
+      };
+
+      final orderedListings =
+          ids
+              .map((id) => listingMap[id])
+              .where((item) => item != null)
+              .cast<Listing>()
               .toList();
 
+      // 🔹 Map categories (NO Firestore call needed)cine
+      final categories = categoryHits.map((e) => Category.fromJson(e)).toList();
+      // 🔹 Update UI
       setState(() {
-        categoryResults = allCategories;
-        listingResults = allListings;
+        listingResults = orderedListings;
+        categoryResults = categories;
         isLoading = false;
-
-        if (!recentSearches.contains(text)) {
-          recentSearches.insert(0, text);
-          sessionSearches.insert(0, query);
-          if (recentSearches.length > 10) {
-            recentSearches.removeLast();
-          }
-          _saveRecentSearches();
-        }
       });
-    } catch (e) {
-      debugPrint("Search error: $e");
+    } catch (e, stackTrace) {
+      debugPrint("Algolia error: $e");
+      debugPrint("📍 StackTrace:\n$stackTrace");
       setState(() => isLoading = false);
     }
   }
