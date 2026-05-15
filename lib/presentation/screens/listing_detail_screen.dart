@@ -11,10 +11,12 @@ import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/review_model.dart';
+import 'package:startup_20/data/models/user_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_room_screen.dart';
+import 'package:startup_20/presentation/screens/plan_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
@@ -40,12 +42,14 @@ class ListingDetailScreen extends StatefulWidget {
 
 class _ListingDetailScreenState extends State<ListingDetailScreen> {
   final PageController _pageController = PageController();
+  late Listing currentListing;
   int _currentPage = 0;
   bool _isChatLoading = false;
   bool _isApproving = false;
   bool _isLoading = false;
   bool _isLiked = false;
   int _likes = 0;
+  AppUser? listingUser;
 
   static const List<String> weekDays = [
     "Monday",
@@ -63,11 +67,17 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   @override
   void initState() {
     super.initState();
+    currentListing = widget.listing;
     if (!widget.isPreview) {
       _checkIfFavorite();
       _checkIfLiked();
       _increaseViewCount();
+      _getListingOwner();
     }
+  }
+
+  void _getListingOwner() async {
+    listingUser = await CommonMethods.getUser(currentListing.ownerId);
   }
 
   // ---------- Helper Methods ----------
@@ -86,7 +96,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       }
       await FirebaseFirestore.instance
           .collection('listings')
-          .doc(widget.listing.listingId)
+          .doc(currentListing.listingId)
           .update({'views': FieldValue.increment(1)});
     } catch (e) {
       debugPrint('❌ Failed to increase view count: $e');
@@ -101,7 +111,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             .collection('users')
             .doc(userId)
             .collection('favorites')
-            .doc(widget.listing.listingId)
+            .doc(currentListing.listingId)
             .get();
 
     if (mounted) {
@@ -112,7 +122,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   Future<void> _checkIfLiked() async {
-    _likes = widget.listing.likes;
+    _likes = currentListing.likes;
     if (AppAuthProvider.isAnonymousUser()) return;
 
     final userId = FirebaseAuth.instance.currentUser!.uid;
@@ -120,7 +130,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     final doc =
         await FirebaseFirestore.instance
             .collection('listings')
-            .doc(widget.listing.listingId)
+            .doc(currentListing.listingId)
             .collection('likedBy')
             .doc(userId)
             .get();
@@ -141,7 +151,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         .collection('users')
         .doc(userId)
         .collection('favorites')
-        .doc(widget.listing.listingId);
+        .doc(currentListing.listingId);
 
     try {
       if (_isFavorite) {
@@ -154,9 +164,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       } else {
         setState(() => _isFavorite = true);
         await favRef.set({
-          'listingId': widget.listing.listingId,
-          'name': widget.listing.name,
-          'image': widget.listing.images.first.fullUrl,
+          'listingId': currentListing.listingId,
+          'name': currentListing.name,
+          'image': currentListing.images.first.fullUrl,
           'createdAt': FieldValue.serverTimestamp(),
         });
 
@@ -179,21 +189,21 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
     if (widget.similarListings.isNotEmpty) {
       return widget.similarListings
-          .where((listing) => listing.listingId != widget.listing.listingId)
+          .where((listing) => listing.listingId != currentListing.listingId)
           .toList();
     }
 
     final snapshot =
         await FirebaseFirestore.instance
             .collection("listings")
-            .where("category", isEqualTo: widget.listing.category)
+            .where("category", isEqualTo: currentListing.category)
             .where("verifiedBy", isNull: false)
             .orderBy("createdAt", descending: true)
             .get();
 
     return snapshot.docs
         .map((doc) => Listing.fromJson(doc.data()))
-        .where((listing) => listing.listingId != widget.listing.listingId)
+        .where((listing) => listing.listingId != currentListing.listingId)
         .toList();
   }
 
@@ -222,16 +232,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   Future<void> _handleListingApproval() async {
     try {
-      if (widget.listing.addedBy == FirebaseAuth.instance.currentUser!.uid) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("You can't approve your own listing!")),
-        );
-        return;
-      }
       setState(() => _isApproving = true);
       await FirebaseFirestore.instance
           .collection("listings")
-          .doc(widget.listing.listingId)
+          .doc(currentListing.listingId)
           .update({
             "verifiedBy":
                 FirebaseAuth.instance.currentUser?.displayName ?? "admin",
@@ -349,8 +353,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       String contributionId;
 
       if (widget.isEditing) {
-        listingId = widget.listing.listingId;
-        contributionId = widget.listing.contributionId;
+        listingId = currentListing.listingId;
+        contributionId = currentListing.contributionId;
       } else {
         listingId = firestore.collection("listings").doc().id;
         contributionId = firestore.collection("contributions").doc().id;
@@ -359,12 +363,12 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       // ⭐ Upload only local images
       final uploadedNewImages = await _uploadImages(
         listingId,
-        widget.listing.localImages ?? [],
+        currentListing.localImages ?? [],
       );
 
       //merge old + new images
       final finalImages = [
-        ...widget.listing.images,
+        ...currentListing.images,
         ...uploadedNewImages.map(
           (img) => ImageFile(
             fileId: img["fileId"],
@@ -378,38 +382,38 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       final listing = Listing(
         listingId: listingId,
         contributionId: contributionId,
-        name: widget.listing.name,
-        address: widget.listing.address,
-        description: widget.listing.description,
-        details: widget.listing.details,
-        geo: widget.listing.geo,
-        phone: widget.listing.phone,
-        email: widget.listing.email,
-        alternatePhone: widget.listing.alternatePhone,
-        category: widget.listing.category,
-        categoryId: widget.listing.categoryId,
-        tags: widget.listing.tags,
-        addedBy: widget.listing.addedBy,
-        updatedBy: widget.listing.updatedBy,
-        ownerId: widget.listing.ownerId,
-        ownerName: widget.listing.ownerName,
+        name: currentListing.name,
+        address: currentListing.address,
+        description: currentListing.description,
+        details: currentListing.details,
+        geo: currentListing.geo,
+        phone: currentListing.phone,
+        email: currentListing.email,
+        alternatePhone: currentListing.alternatePhone,
+        category: currentListing.category,
+        categoryId: currentListing.categoryId,
+        tags: currentListing.tags,
+        addedBy: currentListing.addedBy,
+        updatedBy: currentListing.updatedBy,
+        ownerId: currentListing.ownerId,
+        ownerName: currentListing.ownerName,
         claimStatus: "pending",
         verifiedBy: null,
-        createdAt: widget.listing.createdAt,
+        createdAt: currentListing.createdAt,
         updatedAt: DateTime.now(),
         images: finalImages,
-        reviews: widget.listing.reviews,
-        ratingCount: widget.listing.ratingCount,
-        rating: widget.listing.rating,
-        isClaimed: widget.listing.isClaimed,
-        since: widget.listing.since,
-        likes: widget.listing.likes,
-        views: widget.listing.views,
+        reviews: currentListing.reviews,
+        ratingCount: currentListing.ratingCount,
+        rating: currentListing.rating,
+        isClaimed: currentListing.isClaimed,
+        since: currentListing.since,
+        likes: currentListing.likes,
+        views: currentListing.views,
         isPremium: false,
-        social: widget.listing.social,
-        ratingStats: widget.listing.ratingStats,
-        factorAvgRatings: widget.listing.factorAvgRatings,
-        businessHours: widget.listing.businessHours,
+        social: currentListing.social,
+        ratingStats: currentListing.ratingStats,
+        factorAvgRatings: currentListing.factorAvgRatings,
+        businessHours: currentListing.businessHours,
       );
 
       //Update or Create
@@ -460,7 +464,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   void _shareListing() {
-    final shareUrl = "https://needmet.in/listing/${widget.listing.listingId}";
+    final shareUrl = "https://needmet.in/listing/${currentListing.listingId}";
     SharePlus.instance.share(
       ShareParams(text: 'Check out this listing on NeedMet:\n$shareUrl'),
     );
@@ -844,7 +848,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
-          "Since ${widget.listing.since}",
+          "Since ${currentListing.since}",
           style: const TextStyle(color: AppColors.WHITE, fontSize: 10),
         ),
       ),
@@ -1142,7 +1146,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 onPressed: () {
                   if (widget.isPreview) {
                     return;
-                  } else if (listing.isClaimed) {
+                  } else if (listing.isClaimed && listing.verifiedBy != null) {
                     _handleChat();
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -1815,8 +1819,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     CommonMethods.navigateToSignInScreen(context);
                     return;
                   }
-                  final lat = widget.listing.geo.lat;
-                  final lng = widget.listing.geo.lng;
+                  final lat = currentListing.geo.lat;
+                  final lng = currentListing.geo.lng;
 
                   Uri url;
 
@@ -1854,7 +1858,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 ),
                 icon: const Icon(Icons.call),
                 label: const Text("Call"),
-                onPressed: () => _launchCaller(widget.listing.phone),
+                onPressed: () => _launchCaller(currentListing.phone),
               ),
             ),
           ],
@@ -2062,7 +2066,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               ],
             ),
           ),
-           const Divider(height: 30),
+          const Divider(height: 30),
         ],
       ),
     );
@@ -2114,8 +2118,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   "type": type,
                   "reportedBy": currentUser.displayName,
                   "reportedByUid": currentUser.uid,
-                  "reportedTo": widget.listing.ownerName,
-                  "reportedToUid": widget.listing.ownerId,
+                  "reportedTo": currentListing.ownerName,
+                  "reportedToUid": currentListing.ownerId,
                   "targetId": targetId,
                   "messageId": messageId,
                   "reason": text,
@@ -2134,7 +2138,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   // ---------- Main Build ----------
   @override
   Widget build(BuildContext context) {
-    final listing = widget.listing;
+    final listing = currentListing;
     final appUser = context.read<AppAuthProvider>().appUser;
 
     return Scaffold(
@@ -2148,7 +2152,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           style: TextStyle(color: AppColors.BLACK, fontWeight: FontWeight.bold),
         ),
         actions: [
-          if (!widget.isPreview && widget.listing.verifiedBy != null)
+          if (!widget.isPreview && currentListing.verifiedBy != null)
             IconButton(
               visualDensity: VisualDensity.compact,
               icon: Icon(
@@ -2177,7 +2181,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                         );
                       },
                     ),
-                    if (!widget.isPreview && widget.listing.verifiedBy == null)
+                    if (!widget.isPreview && currentListing.verifiedBy == null)
                       _isApproving
                           ? SizedBox(
                             height: 35,
@@ -2197,7 +2201,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   ],
                 )
                 : SizedBox(),
-          if (!widget.isPreview && widget.listing.verifiedBy != null)
+          if (!widget.isPreview && currentListing.verifiedBy != null)
             PopupMenuButton(
               icon: const Icon(Icons.more_vert, color: Colors.black87),
               shape: RoundedRectangleBorder(
@@ -2243,6 +2247,49 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                         ],
                       ),
                     ),
+
+                    if (currentListing.isClaimed &&
+                        (appUser?.role == 'admin' || appUser?.role == 'sales'))
+                      PopupMenuItem(
+                        value: "Manage Campaigns",
+                        child: Row(
+                          children: const [
+                            Icon(
+                              Icons.workspace_premium,
+                              color: AppColors.GREEN,
+                              size: 20,
+                            ),
+                            SizedBox(width: 10),
+                            Text("Manage Campaigns"),
+                          ],
+                        ),
+                      ),
+
+                    if (appUser?.role == 'admin' || appUser?.role == 'sales')
+                      PopupMenuItem(
+                        value: "Change Owner",
+                        child: Row(
+                          children: [
+                            Icon(
+                              currentListing.isClaimed
+                                  ? Icons.swap_horiz
+                                  : Icons.person_add_alt_1,
+                              color:
+                                  currentListing.isClaimed
+                                      ? AppColors.RED
+                                      : AppColors.GREEN,
+                              size: 20,
+                            ),
+                            SizedBox(width: 10),
+                            currentListing.isClaimed
+                                ? Text(
+                                  "Change Owner",
+                                  style: TextStyle(color: AppColors.RED),
+                                )
+                                : Text("Assign Owner"),
+                          ],
+                        ),
+                      ),
                   ],
               onSelected: (value) {
                 if (value == "share") {
@@ -2250,7 +2297,20 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 } else if (value == 'need help') {
                   _openSupportChat();
                 } else if (value == "report") {
-                  _showReportPopup('listing', widget.listing.listingId, '');
+                  _showReportPopup('listing', currentListing.listingId, '');
+                } else if (value == 'Manage Campaigns') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (context) => PremiumPlanCard(
+                            currentUser: listingUser,
+                            isDemo: false,
+                          ),
+                    ),
+                  );
+                } else if (value == "Change Owner") {
+                  _showChangeOwnerBottomSheet();
                 }
               },
             ),
@@ -2277,7 +2337,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 ),
                 _buildSellerSection(listing),
 
-                                Padding(
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: const Divider(height: 30),
                 ),
@@ -2299,9 +2359,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   child: const Divider(height: 30),
                 ),
 
-                buildRatingsOverview(widget.listing),
+                buildRatingsOverview(currentListing),
 
-                if (widget.listing.reviews > 0)
+                if (currentListing.reviews > 0)
                   const Padding(
                     padding: EdgeInsets.only(top: 20),
                     child: Center(
@@ -2316,7 +2376,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     ),
                   ),
 
-                _buildReviews(widget.listing),
+                _buildReviews(currentListing),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: const Divider(height: 30),
@@ -2359,7 +2419,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     }
     setState(() => _isChatLoading = true);
     final currentUser = FirebaseAuth.instance.currentUser!;
-    final ownerId = widget.listing.ownerId;
+    final ownerId = currentListing.ownerId;
 
     if (currentUser.uid == ownerId) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2408,9 +2468,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         builder:
             (context) => ChatRoomScreen(
               conversationId: conversationId,
-              otherUserId: widget.listing.ownerId,
+              otherUserId: currentListing.ownerId,
               type: "direct",
-              title: widget.listing.ownerName,
+              title: currentListing.ownerName,
             ),
       ),
     );
@@ -2480,7 +2540,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       "senderId": currentUser.uid,
       "senderName": currentUser.displayName ?? "User",
       "text": "I need help with this listing",
-      "attachments": {"type": "listing", "data": widget.listing.toJson()},
+      "attachments": {"type": "listing", "data": currentListing.toJson()},
       "status": "sent",
       "createdAt": FieldValue.serverTimestamp(),
       "replyTo": null,
@@ -2500,6 +2560,301 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               title: "Support 24/7",
             ),
       ),
+    );
+  }
+
+  void _showChangeOwnerBottomSheet() {
+    final TextEditingController searchController = TextEditingController();
+
+    List<AppUser> users = [];
+    bool isLoading = true;
+    bool initialLoaded = false;
+
+    Future<void> loadInitialUsers(StateSetter setModalState) async {
+      try {
+        final snapshot =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .orderBy('createdAt', descending: true)
+                .limit(10)
+                .get();
+
+        users =
+            snapshot.docs
+                .map((doc) => AppUser.fromMap(doc.data(), doc.id))
+                .toList();
+      } catch (e) {
+        debugPrint("Load users error: $e");
+      }
+
+      isLoading = false;
+      setModalState(() {});
+    }
+
+    Future<void> searchUsers(
+      String searchText,
+      StateSetter setModalState,
+    ) async {
+      if (searchText.isEmpty) {
+        isLoading = true;
+        setModalState(() {});
+        return loadInitialUsers(setModalState);
+      }
+
+      try {
+        isLoading = true;
+        setModalState(() {});
+
+        QuerySnapshot snapshot;
+
+        /// 🔥 Phone search
+        if (RegExp(r'^[0-9+]+$').hasMatch(searchText)) {
+          snapshot =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .where('phone', isGreaterThanOrEqualTo: searchText)
+                  .where('phone', isLessThanOrEqualTo: '$searchText\uf8ff')
+                  .limit(10)
+                  .get();
+        }
+        /// 🔥 Name search
+        else {
+          snapshot =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .where('name', isGreaterThanOrEqualTo: searchText)
+                  .where('name', isLessThanOrEqualTo: '$searchText\uf8ff')
+                  .limit(10)
+                  .get();
+        }
+
+        users =
+            snapshot.docs
+                .map(
+                  (doc) => AppUser.fromMap(
+                    doc.data() as Map<String, dynamic>,
+                    doc.id,
+                  ),
+                )
+                .toList();
+      } catch (e) {
+        debugPrint("Search error: $e");
+      }
+
+      isLoading = false;
+      setModalState(() {});
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            /// 🔥 Load only once
+            if (!initialLoaded) {
+              initialLoaded = true;
+              loadInitialUsers(setModalState);
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.75,
+                child: Column(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 5,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+
+                    const Text(
+                      "Change Owner",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    TextField(
+                      controller: searchController,
+                      decoration: InputDecoration(
+                        hintText: "Search by name or phone",
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onChanged: (value) {
+                        searchUsers(value, setModalState);
+                      },
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    Expanded(
+                      child:
+                          isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : users.isEmpty
+                              ? const Center(child: Text("No users found"))
+                              : ListView.separated(
+                                itemCount: users.length,
+                                separatorBuilder:
+                                    (_, __) => const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final user = users[index];
+
+                                  return ListTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor: AppColors.THEME_COLOR,
+                                      child: Text(
+                                        CommonMethods.getInitials(user.name),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+
+                                    title: Text(user.name),
+
+                                    subtitle: Text(user.phone ?? ''),
+
+                                    trailing: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.THEME_COLOR,
+                                      ),
+                                      onPressed: () async {
+                                        CommonWidgets.showLoader(context);
+
+                                        try {
+                                          await FirebaseFirestore.instance
+                                              .collection('listings')
+                                              .doc(currentListing.listingId)
+                                              .update({
+                                                'ownerId': user.userId,
+                                                'isClaimed': true,
+                                                'updatedAt':
+                                                    FieldValue.serverTimestamp(),
+                                              });
+
+                                          /// 🔥 Instantly update UI
+                                          setState(() {
+                                            currentListing = Listing(
+                                              listingId:
+                                                  currentListing.listingId,
+                                              contributionId:
+                                                  currentListing.contributionId,
+                                              name: currentListing.name,
+                                              address: currentListing.address,
+                                              description:
+                                                  currentListing.description,
+                                              details: currentListing.details,
+                                              geo: currentListing.geo,
+                                              phone: currentListing.phone,
+                                              alternatePhone:
+                                                  currentListing.alternatePhone,
+                                              email: currentListing.email,
+                                              category: currentListing.category,
+                                              categoryId:
+                                                  currentListing.categoryId,
+                                              tags: currentListing.tags,
+                                              addedBy: currentListing.addedBy,
+                                              updatedBy:
+                                                  currentListing.updatedBy,
+
+                                              /// 🔥 updated values
+                                              ownerId: user.userId,
+                                              ownerName: currentListing.ownerName,
+                                              isClaimed: true,
+
+                                              claimStatus:
+                                                  currentListing.claimStatus,
+                                              verifiedBy:
+                                                  currentListing.verifiedBy,
+                                              createdAt:
+                                                  currentListing.createdAt,
+                                              updatedAt: DateTime.now(),
+                                              images: currentListing.images,
+                                              reviews: currentListing.reviews,
+                                              ratingCount:
+                                                  currentListing.ratingCount,
+                                              rating: currentListing.rating,
+                                              localImages:
+                                                  currentListing.localImages,
+                                              since: currentListing.since,
+                                              likes: currentListing.likes,
+                                              views: currentListing.views,
+                                              isPremium:
+                                                  currentListing.isPremium,
+                                              social: currentListing.social,
+                                              ratingStats:
+                                                  currentListing.ratingStats,
+                                              factorAvgRatings:
+                                                  currentListing
+                                                      .factorAvgRatings,
+                                              businessHours:
+                                                  currentListing.businessHours,
+                                            );
+                                          });
+
+                                          CommonWidgets.hideLoader();
+
+                                          if (context.mounted) {
+                                            Navigator.pop(context);
+
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  "Owner changed successfully",
+                                                  style: TextStyle(
+                                                    color: AppColors.WHITE,
+                                                  ),
+                                                ),
+                                                backgroundColor:
+                                                    AppColors.GREEN,
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          CommonWidgets.hideLoader();
+                                          debugPrint("Assign error: $e");
+                                        }
+                                      },
+                                      child: const Text(
+                                        "Assign",
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
