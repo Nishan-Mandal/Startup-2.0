@@ -12,8 +12,13 @@ import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 
 class PremiumPlanCard extends StatefulWidget {
   final AppUser? currentUser;
+  final bool isDemo;
 
-  const PremiumPlanCard({super.key, required this.currentUser});
+  const PremiumPlanCard({
+    super.key,
+    required this.currentUser,
+    required this.isDemo,
+  });
 
   @override
   State<PremiumPlanCard> createState() => _PremiumPlanCardState();
@@ -449,14 +454,16 @@ class _PremiumPlanCardState extends State<PremiumPlanCard> {
 
                             const SizedBox(height: 6),
 
-                            Text(
-                              "₹${plan.price}",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: isSelected ? Colors.white : Colors.black,
+                            if (!widget.isDemo)
+                              Text(
+                                "₹${plan.price}",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color:
+                                      isSelected ? Colors.white : Colors.black,
+                                ),
                               ),
-                            ),
 
                             Text(
                               plan.planName,
@@ -510,13 +517,14 @@ class _PremiumPlanCardState extends State<PremiumPlanCard> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        "₹${selectedPlan.price}",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                      if (!widget.isDemo)
+                        Text(
+                          "₹${selectedPlan.price}",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
                       Text(
                         "${(selectedPlan.durationInDays / 30).toInt()} months",
                         style: const TextStyle(
@@ -561,217 +569,221 @@ class _PremiumPlanCardState extends State<PremiumPlanCard> {
               const SizedBox(height: 20),
 
               /// 🎟 COUPON SECTION
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Apply Coupon",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    Row(
-                      children: [
-                        /// INPUT
-                        Expanded(
-                          child: TextField(
-                            controller: couponController,
-                            decoration: InputDecoration(
-                              hintText: "Enter coupon code",
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(width: 8),
-
-                        /// APPLY BUTTON
-                        ElevatedButton(
-                          onPressed:
-                              isApplying || appliedCoupon != null
-                                  ? null
-                                  : _applyCoupon,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                appliedCoupon == null
-                                    ? AppColors.THEME_COLOR
-                                    : AppColors.GREY,
-                          ),
-                          child:
-                              isApplying
-                                  ? const SizedBox(
-                                    height: 16,
-                                    width: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                  : Text(
-                                    appliedCoupon == null ? "Apply" : "Applied",
-                                    style: TextStyle(color: AppColors.WHITE),
-                                  ),
-                        ),
-                      ],
-                    ),
-
-                    /// ✅ APPLIED STATE
-                    if (appliedCoupon != null) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Coupon Applied: $appliedCoupon",
-                            style: const TextStyle(color: Colors.green),
-                          ),
-                          GestureDetector(
-                            onTap: _removeCoupon,
-                            child: const Text(
-                              "Remove",
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-
-                    /// 💰 PRICE BREAKDOWN
-                    if (appliedCoupon != null) ...[
-                      Column(
-                        children: [
-                          _priceRow("Price", selectedPlan.price.toDouble()),
-
-                          if (discountAmount > 0)
-                            _priceRow(
-                              "Discount",
-                              discountAmount,
-                              isDiscount: true,
-                            ),
-
-                          const Divider(),
-
-                          _priceRow(
-                            "Total",
-                            double.parse(
-                              (selectedPlan.price - discountAmount)
-                                  .toStringAsFixed(2),
-                            ),
-                            isBold: true,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              Row(
-                children: [
-                  Checkbox(
-                    value: isCashSelected,
-                    onChanged: (value) {
-                      setState(() {
-                        isCashSelected = value ?? false;
-
-                        if (!isCashSelected) {
-                          cashCodeController.clear();
-                        }
-                      });
-                    },
+              if (!widget.isDemo)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
                   ),
-                  const Text("Pay via Cash"),
-                ],
-              ),
-              Column(
-                children: [
-                  /// 🔁 NORMAL PAYMENT (RAZORPAY)
-                  if (!isCashSelected) ...[
-                    Row(
-                      children: [
-                        Visibility(
-                          visible:
-                              (appliedCoupon == null ||
-                                  (appliedCoupon != null &&
-                                      appliedCouponApplicableFor ==
-                                          "one_time")),
-                          child: Expanded(
-                            child: ElevatedButton(
-                              onPressed: _buyPlan,
-                              child: const Text("Buy Now"),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Apply Coupon",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      Row(
+                        children: [
+                          /// INPUT
+                          Expanded(
+                            child: TextField(
+                              controller: couponController,
+                              decoration: InputDecoration(
+                                hintText: "Enter coupon code",
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Visibility(
-                          visible:
-                              (appliedCoupon == null ||
-                                  (appliedCoupon != null &&
-                                      appliedCouponApplicableFor == "emi")),
-                          child: Expanded(
-                            child: OutlinedButton(
-                              onPressed: _buyOnEmi,
-                              child: const Text("Pay EMI"),
+
+                          const SizedBox(width: 8),
+
+                          /// APPLY BUTTON
+                          ElevatedButton(
+                            onPressed:
+                                isApplying || appliedCoupon != null
+                                    ? null
+                                    : _applyCoupon,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  appliedCoupon == null
+                                      ? AppColors.THEME_COLOR
+                                      : AppColors.GREY,
                             ),
+                            child:
+                                isApplying
+                                    ? const SizedBox(
+                                      height: 16,
+                                      width: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                    : Text(
+                                      appliedCoupon == null
+                                          ? "Apply"
+                                          : "Applied",
+                                      style: TextStyle(color: AppColors.WHITE),
+                                    ),
                           ),
+                        ],
+                      ),
+
+                      /// ✅ APPLIED STATE
+                      if (appliedCoupon != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Coupon Applied: $appliedCoupon",
+                              style: const TextStyle(color: Colors.green),
+                            ),
+                            GestureDetector(
+                              onTap: _removeCoupon,
+                              child: const Text(
+                                "Remove",
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
+                      const SizedBox(height: 12),
+
+                      /// 💰 PRICE BREAKDOWN
+                      if (appliedCoupon != null) ...[
+                        Column(
+                          children: [
+                            _priceRow("Price", selectedPlan.price.toDouble()),
+
+                            if (discountAmount > 0)
+                              _priceRow(
+                                "Discount",
+                                discountAmount,
+                                isDiscount: true,
+                              ),
+
+                            const Divider(),
+
+                            _priceRow(
+                              "Total",
+                              double.parse(
+                                (selectedPlan.price - discountAmount)
+                                    .toStringAsFixed(2),
+                              ),
+                              isBold: true,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              if (!widget.isDemo)
+              const SizedBox(height: 20),
+              if (!widget.isDemo)
+                Row(
+                  children: [
+                    Checkbox(
+                      value: isCashSelected,
+                      onChanged: (value) {
+                        setState(() {
+                          isCashSelected = value ?? false;
+
+                          if (!isCashSelected) {
+                            cashCodeController.clear();
+                          }
+                        });
+                      },
                     ),
+                    const Text("Pay via Cash"),
                   ],
-
-                  /// 💵 CASH MODE
-                  if (isCashSelected) ...[
-                    /// 🔑 CODE INPUT
-                    TextField(
-                      controller: cashCodeController,
-                      decoration: InputDecoration(
-                        hintText: "Enter Cash Code",
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        prefixIcon: const Icon(Icons.key),
+                ),
+              if (!widget.isDemo)
+                Column(
+                  children: [
+                    /// 🔁 NORMAL PAYMENT (RAZORPAY)
+                    if (!isCashSelected) ...[
+                      Row(
+                        children: [
+                          Visibility(
+                            visible:
+                                (appliedCoupon == null ||
+                                    (appliedCoupon != null &&
+                                        appliedCouponApplicableFor ==
+                                            "one_time")),
+                            child: Expanded(
+                              child: ElevatedButton(
+                                onPressed: _buyPlan,
+                                child: const Text("Buy Now"),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Visibility(
+                            visible:
+                                (appliedCoupon == null ||
+                                    (appliedCoupon != null &&
+                                        appliedCouponApplicableFor == "emi")),
+                            child: Expanded(
+                              child: OutlinedButton(
+                                onPressed: _buyOnEmi,
+                                child: const Text("Pay EMI"),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
+                    ],
 
-                    const SizedBox(height: 10),
-
-                    /// 💰 CASH PAY BUTTON
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.THEME_COLOR,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        onPressed: () {
-                          _processCashPayment(cashCodeController.text.trim());
-                        },
-                        child: const Text(
-                          "Confirm Cash Payment",
-                          style: TextStyle(color: AppColors.WHITE),
+                    /// 💵 CASH MODE
+                    if (isCashSelected) ...[
+                      /// 🔑 CODE INPUT
+                      TextField(
+                        controller: cashCodeController,
+                        decoration: InputDecoration(
+                          hintText: "Enter Cash Code",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.key),
                         ),
                       ),
-                    ),
+
+                      const SizedBox(height: 10),
+
+                      /// 💰 CASH PAY BUTTON
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.THEME_COLOR,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: () {
+                            _processCashPayment(cashCodeController.text.trim());
+                          },
+                          child: const Text(
+                            "Confirm Cash Payment",
+                            style: TextStyle(color: AppColors.WHITE),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
-              ),
+                ),
             ],
           ),
         ),
