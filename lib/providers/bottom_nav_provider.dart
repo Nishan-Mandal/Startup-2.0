@@ -8,14 +8,4 @@ class BottomNavProvider extends ChangeNotifier {
     currentIndex = index;
     notifyListeners();
   }
-
-  // void hideNavBar() {
-  //   isVisible = false;
-  //   notifyListeners();
-  // }
-
-  // void showNavBar() {
-  //   isVisible = true;
-  //   notifyListeners();
-  // }
 }

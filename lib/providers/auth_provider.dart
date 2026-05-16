@@ -36,13 +36,13 @@ class AppAuthProvider with ChangeNotifier {
     }
 
     // Fetch Firestore user ONE TIME
-    await _fetchAppUser(user.uid);
+    _fetchAppUser(user.uid);
   }
 
   /// Fetch user data only once (no stream)
   Future<void> _fetchAppUser(String uid) async {
     try {
-      final doc = await _db.collection('users').doc(uid).get();
+      final doc = await _db.collection('users').doc(uid).get(const GetOptions(source: Source.cache));
       if (doc.exists) {
         _appUser = AppUser.fromMap(doc.data()!, doc.id);
       } else {

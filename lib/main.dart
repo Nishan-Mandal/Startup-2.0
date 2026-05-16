@@ -23,7 +23,7 @@ Future<void> main() async {
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
-  await NotificationService.initialize();
+  NotificationService.initialize();
   
   runApp(
     MultiProvider(
@@ -108,6 +108,7 @@ class MyApp extends StatelessWidget {
                       : HomeScreen(),
         );
       },
+      
 
       home:
           firebaseUser == null
