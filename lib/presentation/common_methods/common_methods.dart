@@ -7,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:startup_20/data/models/listing_model.dart';
+import 'package:startup_20/data/models/user_model.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
@@ -50,6 +51,25 @@ class CommonMethods {
       }
     } catch (e) {
       debugPrint("Error fetching user name: $e");
+      return null;
+    }
+  }
+
+  static Future<AppUser?> getUser(String userId) async {
+    try {
+      final doc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .get();
+
+      if (!doc.exists || doc.data() == null) {
+        return null;
+      }
+
+      return AppUser.fromMap(doc.data()!, doc.id);
+    } catch (e) {
+      debugPrint('Error fetching user: $e');
       return null;
     }
   }

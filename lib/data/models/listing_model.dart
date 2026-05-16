@@ -102,7 +102,7 @@ class Listing {
       ownerId: json['ownerId'] ?? '',
       ownerName: json['ownerName'] ?? 'Unknown',
       claimStatus: json['claimStatus'] ?? 'unclaimed',
-      verifiedBy: json['verifiedBy'] ?? '',
+      verifiedBy: json['verifiedBy'],
       createdAt: _parseDate(json['createdAt']),
       updatedAt: _parseDate(json['updatedAt']),
       images:

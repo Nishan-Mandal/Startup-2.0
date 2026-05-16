@@ -413,7 +413,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             query: FirebaseFirestore.instance
                                 .collection("listings")
                                 .where(
-                                  "addedBy",
+                                  "ownerId",
                                   isEqualTo: currentUser!.userId,
                                 )
                                 .orderBy("createdAt", descending: true),
@@ -452,12 +452,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     MaterialPageRoute(
                       builder:
                           (context) =>
-                              PremiumPlanCard(currentUser: currentUser),
+                              PremiumPlanCard(currentUser: currentUser, isDemo: true,),
                     ),
                   );
                 }),
 
-                if (currentUser!.role == 'admin')
+                if (currentUser!.role == 'admin' || currentUser!.role == 'sales')
                   _buildTile(Icons.key, "Manage Codes", () {
                     Navigator.push(
                       context,
