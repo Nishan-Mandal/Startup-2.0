@@ -43,7 +43,7 @@ jobs:
 
       - name: Decode iOS GoogleService-Info.plist
         run: |
-          echo "${{ secrets.IOS_GOOGLE_SERVICE_INFO }}" | base64 --decode > ios/Runner/GoogleService-Info.plist
+          echo "${{ secrets.IOS_GOOGLE_SERVICE_INFO }}" | base64 --decode > ios/GoogleService-Info.plist
 
       # ✅ Recreate keystore
       - name: Decode keystore
