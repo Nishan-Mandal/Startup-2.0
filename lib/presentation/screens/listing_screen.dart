@@ -8,7 +8,7 @@ import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/search_screen.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
-import 'package:startup_20/providers/auth_provider.dart'; // ✅ Import your AddListingScreen
+import 'package:startup_20/providers/auth_provider.dart';
 
 class ListingPage extends StatefulWidget {
   final String title;
@@ -20,18 +20,79 @@ class ListingPage extends StatefulWidget {
 }
 
 class _ListingPageState extends State<ListingPage> {
-  late List<Listing> listings;
+  List<Listing> listings = [];
 
-  /// 🔹 Fetch listings from Firestore using the Listing model
-  Future<List<Listing>> fetchListings() async {
-    final snapshot = await widget.query.get();
+  final ScrollController _scrollController = ScrollController();
 
-    listings =
-        snapshot.docs
-            .map((doc) => Listing.fromJson(doc.data() as Map<String, dynamic>))
-            .toList();
+  Timestamp? _lastCreatedAt;
+  bool _isLoading = false;
+  bool _hasMore = true;
 
-    return listings;
+  static const int _pageSize = 20;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _loadListings();
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+              _scrollController.position.maxScrollExtent - 300 &&
+          !_isLoading &&
+          _hasMore) {
+        _loadListings();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadListings() async {
+    if (_isLoading || !_hasMore) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      Query query = widget.query.limit(_pageSize);
+
+      // Pagination using createdAt value
+      if (_lastCreatedAt != null) {
+        query = query.startAfter([_lastCreatedAt]);
+      }
+
+      final snapshot = await query.get();
+
+      if (snapshot.docs.isNotEmpty) {
+        listings.addAll(
+          snapshot.docs.map(
+            (doc) => Listing.fromJson(doc.data() as Map<String, dynamic>),
+          ),
+        );
+
+        // Save last createdAt for next page
+        _lastCreatedAt = snapshot.docs.last.get('createdAt') as Timestamp;
+      }
+
+      // No more data
+      if (snapshot.docs.length < _pageSize) {
+        _hasMore = false;
+      }
+    } catch (e) {
+      debugPrint('Pagination Error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -90,79 +151,77 @@ class _ListingPageState extends State<ListingPage> {
         ),
       ),
 
-      // 🔹 Listings Grid with FutureBuilder
-      body: FutureBuilder<List<Listing>>(
-        future: fetchListings(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return GridView.builder(
-              padding: const EdgeInsets.all(15),
-              itemCount: 6,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 3 / 3.5,
-              ),
-              itemBuilder:
-                  (context, index) => CommonWidgets.shimmerlistingCard(),
-            );
-          }
-
-          if (snapshot.hasError) {
-            debugPrint("Error: ${snapshot.error}");
-            return Center(child: Text("Error: ${snapshot.error}"));
-          }
-
-          final listings = snapshot.data ?? [];
-
-          if (listings.isEmpty) {
-            return _buildEmptyState(context);
-          }
-
-          return GridView.builder(
-            padding: const EdgeInsets.all(15),
-            itemCount: listings.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 3 / 3.8,
-            ),
-            itemBuilder: (context, index) {
-              final listing = listings[index];
-              return GestureDetector(
-                onTap: () {
-                  if (widget.title == 'Pending Approvals') {
-                    CommonMethods.preloadListingImages(context, listing);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder:
-                            (context) => ListingDetailScreen(
-                              listing: listing,
-                              similarListings: listings,
-                            ),
+      body:
+          listings.isEmpty && _isLoading
+              ? GridView.builder(
+                padding: const EdgeInsets.all(15),
+                itemCount: 6,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 3 / 3.5,
+                ),
+                itemBuilder:
+                    (context, index) => CommonWidgets.shimmerlistingCard(),
+              )
+              : listings.isEmpty
+              ? _buildEmptyState(context)
+              : Column(
+                children: [
+                  Expanded(
+                    child: GridView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(15),
+                      itemCount: listings.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 3 / 3.8,
                       ),
-                    ).then((value) {
-                      // Reload your data here
-                      setState(() {});
-                    });
-                    ;
-                  } else {
-                    CommonMethods.navigateToListingDetailScreen(
-                      context,
-                      listing,
-                      listings,
-                    );
-                  }
-                },
-                child: CommonWidgets.listingCard(listing),
-              );
-            },
-          );
-        },
+                      itemBuilder: (context, index) {
+                                    
+                        final listing = listings[index];
+                    
+                        return GestureDetector(
+                          onTap: () {
+                            if (widget.title == 'Pending Approvals') {
+                              CommonMethods.preloadListingImages(context, listing);
+                    
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder:
+                                      (context) => ListingDetailScreen(
+                                        listing: listing,
+                                        similarListings: listings,
+                                      ),
+                                ),
+                              ).then((_) {
+                                setState(() {});
+                              });
+                            } else {
+                              CommonMethods.navigateToListingDetailScreen(
+                                context,
+                                listing,
+                                listings,
+                              );
+                            }
+                          },
+                          child: CommonWidgets.listingCard(listing),
+                        );
+                      },
+                    ),
+                  ),
+                     if (_isLoading && listings.isNotEmpty)
+      if (_isLoading && listings.isNotEmpty)
+      const Padding(
+        padding: EdgeInsets.only(bottom: 20),
+        child: CircularProgressIndicator(),
       ),
+                ],
+              ),
     );
   }
 
