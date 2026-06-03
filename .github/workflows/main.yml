@@ -65,6 +65,11 @@ jobs:
       # Build AAB (for Play Store) 
       - run: flutter build appbundle --release
 
+      - name: Disable Swift Package Manager
+        run: |
+          mkdir -p ios/Flutter
+          touch ios/Flutter/DisableSwiftPackageManager
+
       # ✅ Build iOS (no signing)
       - name: Install CocoaPods dependencies
         run: |
