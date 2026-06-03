@@ -29,7 +29,7 @@ class _AdminCodeScreenState extends State<AdminCodeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -55,7 +55,6 @@ class _AdminCodeScreenState extends State<AdminCodeScreen>
       }
       final userId = FirebaseAuth.instance.currentUser!.uid;
       final userName = await CommonMethods.getUserData(userId, "name");
-
 
       final callable = FirebaseFunctions.instance.httpsCallable(
         'generateCashCodes',
@@ -139,12 +138,16 @@ class _AdminCodeScreenState extends State<AdminCodeScreen>
         title: const Text("Manage Codes"),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: "Cash Codes"), Tab(text: "Coupons")],
+          tabs: const [
+            Tab(text: "Cash Codes"),
+            Tab(text: "Coupons"),
+            Tab(text: "Plans"),
+          ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [_cashSection(), _couponSection()],
+        children: [_cashSection(), _couponSection(), _planSection()],
       ),
     );
   }
@@ -493,7 +496,6 @@ class _AdminCodeScreenState extends State<AdminCodeScreen>
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
 
-
           /// 📅 DATE
           if (createdAt != null)
             Text(
@@ -509,5 +511,116 @@ class _AdminCodeScreenState extends State<AdminCodeScreen>
 
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Widget _planSection() {
+    return StreamBuilder<QuerySnapshot>(
+      stream:
+          FirebaseFirestore.instance
+              .collection('plans')
+              .orderBy('planName')
+              .snapshots(),
+
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snapshot.data!.docs;
+
+        if (docs.isEmpty) {
+          return const Center(child: Text("No Plans Found"));
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: docs.length,
+
+          itemBuilder: (_, index) {
+            final doc = docs[index];
+
+            final data = doc.data() as Map<String, dynamic>;
+
+            return _planCard(doc.id, data);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _planCard(String docId, Map<String, dynamic> data) {
+    final controller = TextEditingController(
+      text: (data['price'] ?? 0).toString(),
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+
+      padding: const EdgeInsets.all(16),
+
+      decoration: BoxDecoration(
+        color: Colors.white,
+
+        borderRadius: BorderRadius.circular(14),
+      ),
+
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+
+        children: [
+          Text(
+            data['planName'] ?? '',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            data['durationInMonths'] ?? '',
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+
+          const SizedBox(height: 16),
+
+          TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+
+            decoration: const InputDecoration(
+              labelText: "Price",
+              prefixText: "₹ ",
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          Align(
+            alignment: Alignment.centerRight,
+
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.save),
+
+              label: const Text("Update"),
+
+              onPressed: () async {
+                final price = int.tryParse(controller.text.trim());
+
+                if (price == null) {
+                  _showSnack("Invalid Price");
+                  return;
+                }
+
+                await FirebaseFirestore.instance
+                    .collection('plans')
+                    .doc(docId)
+                    .update({'price': price});
+
+                _showSnack("Plan Updated ✅");
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

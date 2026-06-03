@@ -93,23 +93,33 @@ class _HomeScreenState extends State<HomeScreen> {
     final doc = querySnapshot.docs.first;
     final data = doc.data();
 
-    // ✅ Step 1: Get categories from home doc
     List<String> categories = List<String>.from(data["listings"] ?? []);
 
-    // ✅ Step 2: Fetch listings matching categories
-    if (categories.isNotEmpty) {
-      final listingsQuery =
-          await FirebaseFirestore.instance
-              .collection("listings")
-              .where("category", whereIn: categories)
-              .where("verifiedBy", isNull: false)
-              .get();
+    listings.clear();
 
-      listings =
-          listingsQuery.docs.map((e) => Listing.fromJson(e.data())).toList();
+    if (categories.isNotEmpty) {
+      // Fetch 8 listings from each category
+      final futures =
+          categories.map((category) {
+            return FirebaseFirestore.instance
+                .collection("listings")
+                .where("category", isEqualTo: category)
+                .where("verifiedBy", isNull: false)
+                .orderBy("createdAt", descending: true)
+                .limit(8)
+                .get();
+          }).toList();
+
+      final results = await Future.wait(futures);
+
+      for (final snapshot in results) {
+        listings.addAll(
+          snapshot.docs.map((doc) => Listing.fromJson(doc.data())),
+        );
+      }
     }
 
-    return HomeModel.fromJson(doc.data());
+    return HomeModel.fromJson(data);
   }
 
   List<Listing> listingsByCategory(String category) {

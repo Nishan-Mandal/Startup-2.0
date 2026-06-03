@@ -15,6 +15,9 @@ class _LocationPickerState extends State<LocationPicker> {
   GoogleMapController? _mapController;
   LatLng? _currentLatLng;
   final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _latitudeController = TextEditingController();
+
+  final TextEditingController _longitudeController = TextEditingController();
   bool _isLoading = false;
 
   @override
@@ -57,6 +60,10 @@ class _LocationPickerState extends State<LocationPicker> {
       _addressController.text = await CommonMethods.getAddressFromLatLng(pos);
       setState(() => _currentLatLng = pos);
 
+      _latitudeController.text = pos.latitude.toStringAsFixed(6);
+
+      _longitudeController.text = pos.longitude.toStringAsFixed(6);
+
       // Move camera to user's location
       _mapController?.animateCamera(CameraUpdate.newLatLngZoom(pos, 15));
     } catch (e) {
@@ -67,6 +74,31 @@ class _LocationPickerState extends State<LocationPicker> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _moveToCoordinates() async {
+    final lat = double.tryParse(_latitudeController.text);
+
+    final lng = double.tryParse(_longitudeController.text);
+
+    if (lat == null || lng == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Invalid coordinates")));
+      return;
+    }
+
+    final position = LatLng(lat, lng);
+
+    setState(() {
+      _currentLatLng = position;
+    });
+
+    _mapController?.animateCamera(CameraUpdate.newLatLngZoom(position, 15));
+
+    _addressController.text = await CommonMethods.getAddressFromLatLng(
+      position,
+    );
   }
 
   @override
@@ -97,6 +129,12 @@ class _LocationPickerState extends State<LocationPicker> {
                             .text = await CommonMethods.getAddressFromLatLng(
                           _currentLatLng!,
                         );
+
+                        _latitudeController.text = _currentLatLng!.latitude
+                            .toStringAsFixed(6);
+
+                        _longitudeController.text = _currentLatLng!.longitude
+                            .toStringAsFixed(6);
                         if (!mounted) return;
                         setState(() {});
                       }
@@ -137,19 +175,63 @@ class _LocationPickerState extends State<LocationPicker> {
                     child: Column(
                       children: [
                         // Address text field
-                        Row(
+                        Column(
                           children: [
-                            Expanded(
-                              child: Container(
-                                color: Colors.white,
-                                child: TextFormField(
-                                  controller: _addressController,
-                                  readOnly: false,
-                                  decoration: const InputDecoration(
-                                    labelText: "*Address",
-                                    border: OutlineInputBorder(),
+                            Container(
+                              color: Colors.white,
+                              child: TextFormField(
+                                controller: _addressController,
+                                decoration: const InputDecoration(
+                                  labelText: "*Address",
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 10),
+
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _latitudeController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    decoration: const InputDecoration(
+                                      labelText: "Latitude",
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
                                 ),
+
+                                const SizedBox(width: 10),
+
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _longitudeController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    decoration: const InputDecoration(
+                                      labelText: "Longitude",
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 10),
+
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _moveToCoordinates,
+                                icon: const Icon(Icons.location_searching),
+                                label: const Text("Locate Coordinates"),
                               ),
                             ),
                           ],
@@ -158,7 +240,10 @@ class _LocationPickerState extends State<LocationPicker> {
                         SafeArea(
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              Address address = Address(latLng: _currentLatLng!, addressText: _addressController.text);
+                              Address address = Address(
+                                latLng: _currentLatLng!,
+                                addressText: _addressController.text,
+                              );
                               Navigator.pop(context, address);
                             },
                             icon: const Icon(
