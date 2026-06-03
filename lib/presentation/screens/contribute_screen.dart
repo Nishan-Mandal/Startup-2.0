@@ -36,6 +36,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
       if (userId != null) {
         final doc = FirebaseFirestore.instance.collection('users').doc(userId);
         final user = await doc.get();
+        if (!mounted) return;
         if (user.exists) {
           setState(() {
             currentUser = AppUser.fromMap(user.data()!, user.id);
@@ -49,6 +50,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
       }
     } catch (e) {
       debugPrint("Error fetching user: $e");
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
@@ -211,7 +213,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                                 query: FirebaseFirestore.instance
                                     .collection("listings")
                                     .where("verifiedBy", isNull: true)
-                                    .orderBy("createdAt"),
+                                    .orderBy("createdAt", descending: true),
                               ),
                         ),
                       );
