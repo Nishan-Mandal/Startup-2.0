@@ -29,8 +29,11 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          flutter-version: '3.29.2'
           architecture: x64
+
+      - name: Verify Flutter Version
+        run: flutter --version
 
       # ✅ Install dependencies
       - name: Install dependencies
