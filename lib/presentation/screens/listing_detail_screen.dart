@@ -16,8 +16,8 @@ import 'package:startup_20/data/models/user_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
-import 'package:startup_20/presentation/screens/campaign_selection_screen.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_room_screen.dart';
+import 'package:startup_20/presentation/screens/plan_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
@@ -2369,7 +2369,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     context,
                     MaterialPageRoute(
                       builder:
-                          (context) => CampaignSelectionScreen(
+                          (context) => PremiumPlanCard(
                             currentUser: listingUser,
                             isDemo: false,
                           ),
