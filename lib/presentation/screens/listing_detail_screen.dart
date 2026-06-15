@@ -16,7 +16,6 @@ import 'package:startup_20/data/models/user_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
-import 'package:startup_20/presentation/screens/campaign_selection_screen.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_room_screen.dart';
 import 'package:startup_20/presentation/screens/plan_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
