@@ -2369,7 +2369,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     context,
                     MaterialPageRoute(
                       builder:
-                          (context) => CampaignSelectionScreen(
+                          (context) => PremiumPlanCard(
                             currentUser: listingUser,
                             isDemo: false,
                           ),
