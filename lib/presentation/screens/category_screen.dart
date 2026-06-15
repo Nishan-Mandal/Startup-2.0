@@ -4,6 +4,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/category_model.dart';
 import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
+import 'package:startup_20/presentation/common_methods/category_cache_service.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
@@ -16,20 +17,34 @@ class CategoryScreen extends StatefulWidget {
 }
 
 class _CategoryScreenState extends State<CategoryScreen> {
-  late Future<List<Category>> _categoriesFuture; // cache the future
+  List<Category> _categories = [];
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _categoriesFuture = _fetchCategories();
+    _loadCategories();
   }
 
-  /// 🔹 Fetch categories from Firestore
-  Future<List<Category>> _fetchCategories() async {
-    final snapshot =
-        await FirebaseFirestore.instance.collection("categories").get();
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await CategoryCacheService.getCategories();
 
-    return snapshot.docs.map((doc) => Category.fromJson(doc.data())).toList();
+      if (!mounted) return;
+
+      setState(() {
+        _categories = categories;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint("Category load error: $e");
+
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -49,58 +64,44 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
           // 🔹 Fetch & Render Categories
           SliverToBoxAdapter(
-            child: FutureBuilder<List<Category>>(
-              future: _categoriesFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Column(
-                    children: List.generate(
-                      3,
-                      (index) => shimmerCategoryScreen(itemCount: 8),
-                    ),
-                  );
-                }
-
-                if (snapshot.hasError) {
-                  return Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text("Error: ${snapshot.error}"),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text("No categories found"),
-                  );
-                }
-
-                final categories = snapshot.data!;
-
-                // 🔹 Group categories by section
-                final Map<String, List<Category>> groupedCategories = {};
-                for (var cat in categories) {
-                  groupedCategories.putIfAbsent(cat.section, () => []).add(cat);
-                }
-
-                // 🔹 Render each section
-                return Column(
-                  children:
-                      groupedCategories.entries.map((entry) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 5),
-                          child: buildCategorySection(entry.key, entry.value),
-                        );
-                      }).toList(),
-                );
-              },
-            ),
+            child:
+                _loading
+                    ? Column(
+                      children: List.generate(
+                        3,
+                        (index) => shimmerCategoryScreen(itemCount: 8),
+                      ),
+                    )
+                    : _categories.isEmpty
+                    ? const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text("No categories found"),
+                    )
+                    : _buildCategorySections(),
           ),
 
           // 🔹 Footer tagline
           SliverToBoxAdapter(child: CommonWidgets.footerTagline()),
         ],
       ),
+    );
+  }
+
+  Widget _buildCategorySections() {
+    final Map<String, List<Category>> groupedCategories = {};
+
+    for (final cat in _categories) {
+      groupedCategories.putIfAbsent(cat.section, () => []).add(cat);
+    }
+
+    return Column(
+      children:
+          groupedCategories.entries.map((entry) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: buildCategorySection(entry.key, entry.value),
+            );
+          }).toList(),
     );
   }
 

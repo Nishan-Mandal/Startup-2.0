@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
@@ -15,8 +16,8 @@ import 'package:startup_20/data/models/user_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
+import 'package:startup_20/presentation/screens/campaign_selection_screen.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_room_screen.dart';
-import 'package:startup_20/presentation/screens/plan_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
@@ -259,8 +260,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   Future<Uint8List?> _compressImage(
     File file, {
-    required int minWidth,
-    required int minHeight,
+    required int targetSize,
     required int quality,
   }) async {
     try {
@@ -270,15 +270,26 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
       final result = await FlutterImageCompress.compressWithFile(
         file.absolute.path,
-        minWidth: minWidth,
-        minHeight: minHeight,
+
+        // Resize first
+        minWidth: targetSize,
+        minHeight: targetSize,
+
+        // Then compress
         quality: quality,
+
+        // WebP produces much smaller files
+        format: CompressFormat.webp,
       );
 
-      if (result == null) throw Exception("Image compression failed");
+      if (result == null) {
+        throw Exception("Image compression failed");
+      }
+
       return result;
     } catch (e) {
       debugPrint("Compression error: $e");
+
       try {
         return await file.readAsBytes();
       } catch (_) {
@@ -294,32 +305,30 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     // Full image compress
     final Uint8List? fullData = await _compressImage(
       file,
-      minWidth: 1080,
-      minHeight: 1080,
+      targetSize: 1280,
       quality: 75,
     );
 
     // Thumbnail compress
     final Uint8List? thumbData = await _compressImage(
       file,
-      minWidth: 300,
-      minHeight: 300,
+      targetSize: 200,
       quality: 50,
     );
 
     // Upload full
-    final fullRef = storageRef.child("listings/$listingId/full_$fileId.jpg");
+    final fullRef = storageRef.child("listings/$listingId/full_$fileId.webp");
     await fullRef.putData(
       fullData!,
-      SettableMetadata(contentType: "image/jpeg"),
+      SettableMetadata(contentType: "image/webp"),
     );
     final fullUrl = await fullRef.getDownloadURL();
 
     // Upload thumbnail
-    final thumbRef = storageRef.child("listings/$listingId/thumb_$fileId.jpg");
+    final thumbRef = storageRef.child("listings/$listingId/thumb_$fileId.webp");
     await thumbRef.putData(
       thumbData!,
-      SettableMetadata(contentType: "image/jpeg"),
+      SettableMetadata(contentType: "image/webp"),
     );
     final thumbUrl = await thumbRef.getDownloadURL();
 
@@ -330,13 +339,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     String listingId,
     List<File> files,
   ) async {
-    List<Map<String, dynamic>> uploaded = [];
-
-    for (var file in files) {
-      final data = await _uploadImage(file, listingId);
-      uploaded.add(data);
-    }
-    return uploaded;
+    return await Future.wait(
+      files.map((file) => _uploadImage(file, listingId)),
+    );
   }
 
   /// Submit contribution
@@ -350,14 +355,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       final firestore = FirebaseFirestore.instance;
 
       String listingId;
-      String contributionId;
 
       if (widget.isEditing) {
         listingId = currentListing.listingId;
-        contributionId = currentListing.contributionId;
       } else {
         listingId = firestore.collection("listings").doc().id;
-        contributionId = firestore.collection("contributions").doc().id;
       }
 
       // ⭐ Upload only local images
@@ -381,7 +383,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       // ⭐ MODIFIED — create Listing model
       final listing = Listing(
         listingId: listingId,
-        contributionId: contributionId,
+        contributionId: '',
         name: currentListing.name,
         address: currentListing.address,
         description: currentListing.description,
@@ -427,16 +429,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             .collection("listings")
             .doc(listingId)
             .set(listing.toJson());
-        await firestore.collection("contributions").doc(contributionId).set({
-          "contributionId": contributionId,
-          "userId": FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
-          "listingId": listingId,
-          "type": "add",
-          "status": "pending",
-          "reviewedBy": null,
-          "createdAt": FieldValue.serverTimestamp(),
-          "updatedAt": FieldValue.serverTimestamp(),
-        });
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1208,6 +1200,69 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     );
   }
 
+  Widget _buildPendingChangesSection(Listing listing) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.AMBER.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.AMBER.withOpacity(0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Modification Details",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 8),
+
+            Row(
+              children: [
+                const Icon(
+                  Icons.person_outline,
+                  size: 18,
+                  color: AppColors.GREY,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    "Updated By: ${listing.updatedBy}",
+                    style: const TextStyle(color: AppColors.GREY),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 6),
+
+            Row(
+              children: [
+                const Icon(Icons.access_time, size: 18, color: AppColors.GREY),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    "Updated On: ${_formatDate(listing.updatedAt)}",
+                    style: const TextStyle(color: AppColors.GREY),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '-';
+
+    return DateFormat('dd/MM/yyyy hh:mm a').format(date);
+  }
+
   Widget buildRatingsOverview(Listing listing) {
     if (widget.isPreview) {
       /// 🟡 PREVIEW MODE — use local listing object
@@ -1287,15 +1342,20 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 children: [
                   _CategoryRating(
                     title: "Behaviour",
-                    rating: factorAvgRatings['behaviour'] ?? 0.0,
+                    rating:
+                        (factorAvgRatings['behaviour'] as num?)?.toDouble() ??
+                        0.0,
                   ),
                   _CategoryRating(
                     title: "Quality",
-                    rating: factorAvgRatings['quality'] ?? 0.0,
+                    rating:
+                        (factorAvgRatings['quality'] as num?)?.toDouble() ??
+                        0.0,
                   ),
                   _CategoryRating(
                     title: "Value",
-                    rating: factorAvgRatings['value'] ?? 0.0,
+                    rating:
+                        (factorAvgRatings['value'] as num?)?.toDouble() ?? 0.0,
                   ),
                   _CategoryRating(title: "Overall", rating: rating),
                 ],
@@ -2163,6 +2223,12 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 _toggleFavorite();
               },
             ),
+          IconButton(
+            icon: Icon(Icons.share_outlined),
+            onPressed: () {
+              _shareListing();
+            },
+          ),
           if (!AppAuthProvider.isAnonymousUser() && !widget.isPreview)
             appUser?.role == 'admin'
                 ? Row(
@@ -2303,7 +2369,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     context,
                     MaterialPageRoute(
                       builder:
-                          (context) => PremiumPlanCard(
+                          (context) => CampaignSelectionScreen(
                             currentUser: listingUser,
                             isDemo: false,
                           ),
@@ -2354,10 +2420,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   ),
                 ),
                 _buildDescription(listing),
+
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: const Divider(height: 30),
                 ),
+
+                if (appUser?.role == 'admin' && listing.updatedBy.isNotEmpty)
+                  _buildPendingChangesSection(listing),
 
                 buildRatingsOverview(currentListing),
 
@@ -2781,7 +2851,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
                                               /// 🔥 updated values
                                               ownerId: user.userId,
-                                              ownerName: currentListing.ownerName,
+                                              ownerName:
+                                                  currentListing.ownerName,
                                               isClaimed: true,
 
                                               claimStatus:
