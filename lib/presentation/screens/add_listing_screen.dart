@@ -5,14 +5,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/core/constants/category_field_schema.dart';
 import 'package:startup_20/data/models/category_field_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
+import 'package:startup_20/presentation/common_methods/category_cache_service.dart';
 import 'package:startup_20/presentation/common_methods/location_picker.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/data/models/category_model.dart' as models;
+import 'package:startup_20/providers/auth_provider.dart';
 
 class AddListingScreen extends StatefulWidget {
   final Listing? existingListing;
@@ -43,7 +46,8 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
   double _latitude = 0;
   double _longitude = 0;
-  late Future<List<models.Category>> _categoriesFuture;
+  List<models.Category> _categories = [];
+  bool _categoriesLoaded = false;
   String? _selectedCategoryId;
   String? _selectedCategoryName;
   bool _draftLoaded = false;
@@ -81,7 +85,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
   @override
   void initState() {
     super.initState();
-    _categoriesFuture = fetchCategories();
+    _loadCategories();
 
     if (!isEditing) {
       _checkDraftOnStart();
@@ -117,7 +121,9 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
       _selectedTags = Set<String>.from(widget.existingListing!.tags);
 
-      _onCategorySelected(listing.category);
+      if (!isEditing) {
+        _onCategorySelected(listing.category);
+      }
       _prePopulateDynamicForms(listing);
     }
   }
@@ -449,37 +455,37 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
     _socialFormCtrl.values = Map<String, dynamic>.from(listing.social);
 
-    _categoryFormCtrl.values = Map<String, dynamic>.from(listing.details);
-
     _manualFields.clear();
 
     listing.details.forEach((key, value) {
-      if (_categoryFields != null) {
-        final schemaLabels =
-            _categoryFields!.map((field) => field.label).toSet();
-        if (!schemaLabels.contains(key)) {
-          _manualFields.add({
-            'key': TextEditingController(text: key),
-            'value': TextEditingController(text: value.toString()),
-          });
-        }
-      } else {
-        _manualFields.add({
-          'key': TextEditingController(text: key),
-          'value': TextEditingController(text: value.toString()),
-        });
-      }
+      if (key == "Accept Online Payments") return;
+
+      _manualFields.add({
+        'key': TextEditingController(text: key),
+        'value': TextEditingController(text: value.toString()),
+      });
     });
   }
 
-  /// 🔹 Fetch categories from Firestore
-  Future<List<models.Category>> fetchCategories() async {
-    final snapshot =
-        await FirebaseFirestore.instance.collection("categories").get();
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await CategoryCacheService.getCategories();
 
-    return snapshot.docs
-        .map((doc) => models.Category.fromJson(doc.data()))
-        .toList();
+      if (!mounted) return;
+
+      setState(() {
+        _categories = categories;
+        _categoriesLoaded = true;
+      });
+    } catch (e) {
+      debugPrint(e.toString());
+
+      if (!mounted) return;
+
+      setState(() {
+        _categoriesLoaded = true;
+      });
+    }
   }
 
   /// Pick multiple images
@@ -549,12 +555,31 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
 
   void _previewListing() {
-    final Map<String, dynamic> details = {..._categoryFormCtrl.values};
-    details["Accept Online Payments"] =
-        _detailedFormCtrl.values["Accept Online Payments"] ?? false;
+    final Map<String, String> details = {};
+
+    final appUser = context.read<AppAuthProvider>().appUser;
+
+
+    /// ADD MODE
+    if (!isEditing) {
+      details.addAll(convertToStringMap(_categoryFormCtrl.values));
+    }
+
+    /// COMMON FIELD
+    final dynamic paymentValue =
+        _detailedFormCtrl.values["Accept Online Payments"];
+
+    final bool acceptsOnlinePayments =
+        paymentValue is bool
+            ? paymentValue
+            : paymentValue.toString().toLowerCase() == "yes";
+
+    details["Accept Online Payments"] = acceptsOnlinePayments ? "Yes" : "No";
+
+    /// MANUAL FIELDS
     for (var field in _manualFields) {
-      final key = field['key']!.text.trim();
-      final value = field['value']!.text.trim();
+      final key = field['key']?.text.trim() ?? '';
+      final value = field['value']?.text.trim() ?? '';
 
       if (key.isNotEmpty) {
         details[key] = value;
@@ -570,27 +595,36 @@ class _AddListingScreenState extends State<AddListingScreen> {
       contributionId: widget.existingListing?.contributionId ?? 'draft',
 
       name: _basicFormCtrl.values['Shop/Service Name'] ?? '',
+
       address: _addressController.text.trim(),
+
       description: _detailedFormCtrl.values['Description'] ?? '',
 
       details: details,
       social: social,
 
       geo: Geo(lat: _latitude, lng: _longitude),
+
       phone: _contactFormCtrl.values['Phone'] ?? '',
+
       alternatePhone:
           _contactFormCtrl.values['Alternate Phone (Optional)'] ?? '',
+
       email: _contactFormCtrl.values['Email'] ?? '',
 
       category: _selectedCategoryName ?? '',
       categoryId: _selectedCategoryId ?? '',
+
       tags: _selectedTags.toList(),
 
       ownerName: _basicFormCtrl.values['Owners Name'] ?? '',
+
       addedBy: FirebaseAuth.instance.currentUser?.uid ?? 'anonymous',
+
       ownerId: FirebaseAuth.instance.currentUser?.uid ?? 'anonymous',
 
       createdAt: widget.existingListing?.createdAt ?? DateTime.now(),
+
       updatedAt: DateTime.now(),
 
       images: _remoteImages,
@@ -605,17 +639,23 @@ class _AddListingScreenState extends State<AddListingScreen> {
             _detailedFormCtrl.values['Since']?.toString() ?? '2025',
           ) ??
           2025,
+
       likes: 0,
       views: 0,
       isPremium: false,
+
       ratingStats: {},
       factorAvgRatings: {},
+
       businessHours:
           _addOpenHours
               ? _businessHours.map((day, schedule) => MapEntry(day, schedule))
               : {},
+
       isClaimed: widget.existingListing?.isClaimed ?? false,
-      updatedBy: FirebaseAuth.instance.currentUser?.uid ?? "anonymous",
+
+      updatedBy: appUser?.name?? "anonymous",
+
       claimStatus: widget.existingListing?.claimStatus ?? "draft",
     );
 
@@ -631,6 +671,31 @@ class _AddListingScreenState extends State<AddListingScreen> {
             ),
       ),
     );
+  }
+
+  Map<String, String> convertToStringMap(Map<String, dynamic> source) {
+    final result = <String, String>{};
+
+    source.forEach((key, value) {
+      if (value == null) return;
+
+      if (value is bool) {
+        result[key] = value ? 'Yes' : 'No';
+      } else if (value is List) {
+        result[key] = value.join(', ');
+      } else if (value is Map) {
+        final min = value['min'];
+        final max = value['max'];
+
+        if (min != null || max != null) {
+          result[key] = '₹${min ?? ''} - ₹${max ?? ''}';
+        }
+      } else {
+        result[key] = value.toString();
+      }
+    });
+
+    return result;
   }
 
   void _showImageSourcePicker() {
@@ -765,16 +830,23 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
 
   Widget _stepCategoryDetails() {
+    if (isEditing) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: _buildManualKeyValueSection(),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          if (_categoryFields != null) _header("Detailed Info"),
           if (_categoryFields != null)
             DynamicCategoryForm(
               schema: _categoryFields!,
               controller: _categoryFormCtrl,
             ),
+
           _buildManualKeyValueSection(),
         ],
       ),
@@ -817,6 +889,9 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   icon: const Icon(Icons.close, color: Colors.red),
                   onPressed: () {
                     setState(() {
+                      field['key']?.dispose();
+                      field['value']?.dispose();
+
                       _manualFields.removeAt(index);
                     });
                   },
@@ -1050,37 +1125,28 @@ class _AddListingScreenState extends State<AddListingScreen> {
           ),
           SizedBox(height: 16),
           // Category dropdown
-          FutureBuilder<List<models.Category>>(
-            future: _categoriesFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (snapshot.hasError) {
-                return Text("Error: ${snapshot.error}");
-              }
-
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Text("No categories found");
-              }
-
-              final categories = snapshot.data!;
-
-              return SearchableDropdown(
-                categories: categories,
-                selectedCategoryId: _selectedCategoryId,
-                selectedCategoryName: _selectedCategoryName,
-                onCategorySelected: (String id, String name) {
-                  setState(() {
-                    _selectedCategoryId = id;
-                    _selectedCategoryName = name;
-                    _onCategorySelected(name);
-                  });
-                },
-              );
-            },
-          ),
+          if (!_categoriesLoaded)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_categories.isEmpty)
+            const Text("No categories found")
+          else
+            SearchableDropdown(
+              categories: _categories,
+              selectedCategoryId: _selectedCategoryId,
+              selectedCategoryName: _selectedCategoryName,
+              onCategorySelected: (String id, String name) {
+                setState(() {
+                  _selectedCategoryId = id;
+                  _selectedCategoryName = name;
+                  _onCategorySelected(name);
+                });
+              },
+            ),
           SizedBox(height: 16),
           // DynamicCategoryForm(_basicFields)
           DynamicCategoryForm(
@@ -1821,13 +1887,16 @@ class _DynamicCategoryFormState extends State<DynamicCategoryForm> {
   /* ---------------- BOOLEAN ---------------- */
 
   Widget _booleanRow(CategoryField field) {
-    // ✅ Initialize default value ONCE
-    widget.controller.values.putIfAbsent(
-      field.label,
-      () => field.label == 'Accept Online Payments',
-    );
+    final dynamic rawValue = widget.controller.values[field.label];
 
-    final bool value = widget.controller.values[field.label] as bool;
+    bool value = false;
+
+    if (rawValue is bool) {
+      value = rawValue;
+    } else if (rawValue is String) {
+      value =
+          rawValue.toLowerCase() == 'yes' || rawValue.toLowerCase() == 'true';
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
@@ -1849,7 +1918,6 @@ class _DynamicCategoryFormState extends State<DynamicCategoryForm> {
       ),
     );
   }
-
   /* ---------------- COUNTER ---------------- */
 
   Widget _counterRow(CategoryField field) {

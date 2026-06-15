@@ -9,7 +9,7 @@ class Listing {
   final String name;
   final String address;
   final String description;
-  final Map<String, dynamic> details;
+  final Map<String, String> details;
   final Geo geo;
   final String phone;
   final String alternatePhone;
@@ -87,7 +87,11 @@ class Listing {
       description: json['description'] ?? '',
       details:
           json['details'] != null
-              ? Map<String, dynamic>.from(json['details'])
+              ? Map<String, String>.from(
+                json['details'].map(
+                  (k, v) => MapEntry(k.toString(), v.toString()),
+                ),
+              )
               : {},
       geo: Geo.fromJson(json['geo'] ?? {}),
       phone: json['phone'] ?? '',
@@ -167,6 +171,7 @@ class Listing {
       'verifiedBy': verifiedBy,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
+      'updatedBy': updatedBy,
       'images': images.map((e) => e.toJson()).toList(),
       // 'reviews': reviews,
       // 'rating': reviews,
