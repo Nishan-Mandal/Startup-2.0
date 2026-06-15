@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
@@ -87,6 +88,9 @@ class _SearchScreenState extends State<SearchScreen> {
       query = text;
     });
 
+    final appUser = context.read<AppAuthProvider>().appUser;
+    final isAdmin = appUser?.role == 'admin';
+
     try {
       // 🔹 Parallel search
       final results = await Future.wait([
@@ -120,7 +124,7 @@ class _SearchScreenState extends State<SearchScreen> {
         final listingsChunk =
             snapshot.docs.map((doc) {
               final data = doc.data();
-              data['listingId'] = doc.id; // 🔥 IMPORTANT
+              data['listingId'] = doc.id;
               return Listing.fromJson(data);
             }).toList();
 
@@ -139,11 +143,17 @@ class _SearchScreenState extends State<SearchScreen> {
               .cast<Listing>()
               .toList();
 
+      final filteredListings =
+          orderedListings.where((listing) {
+            return isAdmin ||
+                (listing.verifiedBy != null && listing.verifiedBy!.isNotEmpty);
+          }).toList();
+
       // 🔹 Map categories (NO Firestore call needed)cine
       final categories = categoryHits.map((e) => Category.fromJson(e)).toList();
       // 🔹 Update UI
       setState(() {
-        listingResults = orderedListings;
+        listingResults = filteredListings;
         categoryResults = categories;
         isLoading = false;
       });

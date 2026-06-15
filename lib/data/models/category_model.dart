@@ -42,7 +42,7 @@ class Category {
       "imageUrl": imageUrl,
       "tags": tags,
       "section": section,
-      "createdAt": Timestamp.fromDate(createdAt),
+      "createdAt": createdAt.toIso8601String(),
     };
   }
 }
