@@ -129,7 +129,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Widget> categorySectionSlivers(HomeModel homeData, int index) {
     final categoryName = homeData.listings[index];
-    debugPrint(categoryName);
     final categoryListings = listingsByCategory(categoryName);
 
     if (categoryListings.isEmpty) return [];
