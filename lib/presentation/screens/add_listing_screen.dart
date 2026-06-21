@@ -374,20 +374,22 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
 
   void _addAutoTags() {
-    final category = _selectedCategoryName ?? '';
-    final shopName = _basicFormCtrl.values['Shop/Service Name'] ?? '';
-    final owner = _basicFormCtrl.values['Owners Name'] ?? '';
+    if (_selectedTags.isEmpty) {
+      final category = _selectedCategoryName ?? '';
+      final shopName = _basicFormCtrl.values['Shop/Service Name'] ?? '';
+      final owner = _basicFormCtrl.values['Owners Name'] ?? '';
 
-    _selectedTags.add(category);
-    _selectedTags.add("$category near me");
-    _selectedTags.add("$category nearby");
+      _selectedTags.add(category);
+      _selectedTags.add("$category near me");
+      _selectedTags.add("$category nearby");
 
-    if (shopName.isNotEmpty) {
-      _selectedTags.add(shopName);
-    }
+      if (shopName.isNotEmpty) {
+        _selectedTags.add(shopName);
+      }
 
-    if (owner.isNotEmpty) {
-      _selectedTags.add(owner);
+      if (owner.isNotEmpty) {
+        _selectedTags.add(owner);
+      }
     }
   }
 
@@ -457,14 +459,18 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
     _manualFields.clear();
 
-    listing.details.forEach((key, value) {
-      if (key == "Accept Online Payments") return;
+
+    for (final key in listing.detailsOrder) {
+      if (!listing.details.containsKey(key)) continue;
+      final value = listing.details[key];
+
+      if (key == "Accept Online Payments") continue;
 
       _manualFields.add({
         'key': TextEditingController(text: key),
         'value': TextEditingController(text: value.toString()),
       });
-    });
+    }
   }
 
   Future<void> _loadCategories() async {
@@ -556,9 +562,9 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
   void _previewListing() {
     final Map<String, String> details = {};
+    final List<String> detailsOrder = [];
 
     final appUser = context.read<AppAuthProvider>().appUser;
-
 
     /// ADD MODE
     if (!isEditing) {
@@ -575,6 +581,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
             : paymentValue.toString().toLowerCase() == "yes";
 
     details["Accept Online Payments"] = acceptsOnlinePayments ? "Yes" : "No";
+    detailsOrder.add("Accept Online Payments");
 
     /// MANUAL FIELDS
     for (var field in _manualFields) {
@@ -583,6 +590,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
       if (key.isNotEmpty) {
         details[key] = value;
+        detailsOrder.add(key);
       }
     }
 
@@ -601,6 +609,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
       description: _detailedFormCtrl.values['Description'] ?? '',
 
       details: details,
+      detailsOrder: detailsOrder,
       social: social,
 
       geo: Geo(lat: _latitude, lng: _longitude),
@@ -654,7 +663,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
       isClaimed: widget.existingListing?.isClaimed ?? false,
 
-      updatedBy: appUser?.name?? "anonymous",
+      updatedBy: appUser?.name ?? "anonymous",
 
       claimStatus: widget.existingListing?.claimStatus ?? "draft",
     );
@@ -1330,7 +1339,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   return;
                 }
                 await _nextStep();
-                if (_currentStep == 7) {
+                if (_currentStep == 7 && !isEditing) {
                   _addAutoTags();
                 }
               },
