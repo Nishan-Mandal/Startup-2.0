@@ -10,6 +10,7 @@ class Listing {
   final String address;
   final String description;
   final Map<String, String> details;
+  final List<String> detailsOrder;
   final Geo geo;
   final String phone;
   final String alternatePhone;
@@ -47,6 +48,7 @@ class Listing {
     required this.address,
     required this.description,
     required this.details,
+    required this.detailsOrder,
     required this.geo,
     required this.phone,
     required this.alternatePhone,
@@ -93,6 +95,7 @@ class Listing {
                 ),
               )
               : {},
+      detailsOrder: json['detailsOrder'] != null ? List<String>.from(json['detailsOrder']): [],
       geo: Geo.fromJson(json['geo'] ?? {}),
       phone: json['phone'] ?? '',
       alternatePhone: json['alternatePhone'] ?? '',
@@ -156,6 +159,7 @@ class Listing {
       'address': address,
       'description': description,
       'details': details,
+      'detailsOrder':detailsOrder,
       'geo': geo.toJson(),
       'phone': phone,
       'email': email,
