@@ -70,10 +70,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     super.initState();
     currentListing = widget.listing;
     if (!widget.isPreview) {
+      _getListingOwner();
       _checkIfFavorite();
       _checkIfLiked();
-      _increaseViewCount();
-      _getListingOwner();
     }
   }
 
@@ -379,7 +378,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           ),
         ),
       ];
-
+    
       // ⭐ MODIFIED — create Listing model
       final listing = Listing(
         listingId: listingId,
@@ -388,6 +387,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         address: currentListing.address,
         description: currentListing.description,
         details: currentListing.details,
+        detailsOrder: currentListing.detailsOrder,
         geo: currentListing.geo,
         phone: currentListing.phone,
         email: currentListing.email,
@@ -579,17 +579,46 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     required Map<String, double> factorRatings,
     required String comment,
   }) async {
+    
     if (AppAuthProvider.isAnonymousUser()) {
       CommonMethods.navigateToSignInScreen(context);
       return;
     }
 
     try {
+    
       final firestore = FirebaseFirestore.instance;
+      
       final user = FirebaseAuth.instance.currentUser!;
+      
       final listingRef = firestore
           .collection('listings')
           .doc(listing.listingId);
+
+     
+      final countSnap =
+          await listingRef
+              .collection('reviews')
+              .where('userId', isEqualTo: user.uid)
+              .count()
+              .get();
+
+      final reviewCount = countSnap.count ?? 0;
+    
+
+      if (reviewCount >= 2) {
+      
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Sorry You can add a maximum of 2 reviews for this Listing",
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+        return;
+      }
 
       /// ✅ Remove unrated factors (0 values)
       final validValues = factorRatings.values.where((v) => v > 0).toList();
@@ -689,6 +718,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   void dispose() {
     _pageController.dispose();
     _reviewController.dispose();
+    _increaseViewCount();
     super.dispose();
   }
 
@@ -1956,7 +1986,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     return value.toString();
   }
 
-  Widget _buildDetailsTable(Map<String, dynamic> details) {
+  Widget _buildDetailsTable(Listing listing) {
+    final details = listing.details;
+
     if (details.isEmpty) {
       return const SizedBox();
     }
@@ -1966,24 +1998,25 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     }
 
     // ✅ Step 1: Filter valid entries
-    final validEntries =
-        details.entries.where((e) {
-          final value = e.value;
-
-          // Case 1: Direct null
-          if (value == null) return false;
-
-          // Case 2: Map with all null values
-          if (value is Map) {
-            return value.values.any((v) => v != null);
-          }
-
-          return true;
-        }).toList();
-
+    final validEntries = details.entries.toList();
+    
     // ✅ Step 2: If nothing valid → hide entire section
     if (validEntries.isEmpty) {
       return const SizedBox();
+    }
+
+    final orderedEntries = <MapEntry<String, dynamic>>[];
+
+    // New listings -> saved order use krenge
+    for (final key in listing.detailsOrder) {
+      if (details.containsKey(key)) {
+        orderedEntries.add(MapEntry(key, details[key]));
+      }
+    }
+
+    // Old listings fallback
+    if (orderedEntries.isEmpty) {
+      orderedEntries.addAll(validEntries);
     }
 
     return Padding(
@@ -2051,7 +2084,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 ),
 
                 /// 🔹 Data Rows
-                ...details.entries
+                ...orderedEntries
                     .where((e) {
                       final value = e.value;
 
@@ -2410,7 +2443,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
                 _buildOpenHoursSection(listing),
 
-                _buildDetailsTable(listing.details),
+                _buildDetailsTable(listing),
 
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16.0),
@@ -2836,6 +2869,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                                               description:
                                                   currentListing.description,
                                               details: currentListing.details,
+                                              detailsOrder: [],
                                               geo: currentListing.geo,
                                               phone: currentListing.phone,
                                               alternatePhone:
