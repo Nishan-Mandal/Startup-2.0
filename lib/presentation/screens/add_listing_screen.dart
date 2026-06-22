@@ -459,12 +459,17 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
     _manualFields.clear();
 
+    final keys =
+        listing.detailsOrder.isNotEmpty
+            ? listing.detailsOrder
+            : listing.details.keys.toList();
 
-    for (final key in listing.detailsOrder) {
-      if (!listing.details.containsKey(key)) continue;
-      final value = listing.details[key];
-
+    for (final key in keys) {
       if (key == "Accept Online Payments") continue;
+
+      if (!listing.details.containsKey(key)) continue;
+
+      final value = listing.details[key];
 
       _manualFields.add({
         'key': TextEditingController(text: key),
