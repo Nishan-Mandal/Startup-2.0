@@ -599,9 +599,15 @@ class _AddListingScreenState extends State<AddListingScreen> {
       }
     }
 
-    final Map<String, String> social = _socialFormCtrl.values.map(
-      (k, v) => MapEntry(k, v.toString()),
-    );
+    final Map<String, String> social = {};
+
+    _socialFormCtrl.values.forEach((key, value) {
+      final text = value?.toString().trim() ?? "";
+
+      if (text.isNotEmpty) {
+        social[key] = text;
+      }
+    });
 
     final listing = Listing(
       listingId: widget.existingListing?.listingId ?? 'draft',
@@ -667,7 +673,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
               : {},
 
       isClaimed: widget.existingListing?.isClaimed ?? false,
-
+      isDeleted: false,
       updatedBy: appUser?.name ?? "anonymous",
 
       claimStatus: widget.existingListing?.claimStatus ?? "draft",

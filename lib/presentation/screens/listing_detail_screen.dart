@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/review_model.dart';
@@ -22,6 +24,7 @@ import 'package:startup_20/providers/auth_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
+import 'package:startup_20/core/services/listing_deletion_service.dart';
 
 class ListingDetailScreen extends StatefulWidget {
   final Listing listing;
@@ -48,6 +51,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   bool _isChatLoading = false;
   bool _isApproving = false;
   bool _isLoading = false;
+  double _progress = 0;
+  Timer? _progressIndicator;
   bool _isLiked = false;
   int _likes = 0;
   AppUser? listingUser;
@@ -198,6 +203,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             .collection("listings")
             .where("category", isEqualTo: currentListing.category)
             .where("verifiedBy", isNull: false)
+            .where("isDeleted", isEqualTo: false)
             .orderBy("createdAt", descending: true)
             .get();
 
@@ -343,10 +349,40 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     );
   }
 
+  void startProgress() {
+    _progress = 0;
+
+    _progressIndicator?.cancel();
+
+    _progressIndicator = Timer.periodic(const Duration(milliseconds: 120), (
+      timer,
+    ) {
+      if (!mounted) return;
+
+      setState(() {
+        if (_progress < 0.9) {
+          _progress += 0.01;
+        } else {
+          timer.cancel();
+        }
+      });
+    });
+  }
+
+  void finishProgress() {
+    _progressIndicator?.cancel();
+    if (!mounted) return;
+
+    setState(() {
+      _progress = 1.0;
+    });
+  }
+
   /// Submit contribution
   Future<void> _submitContribution() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
+    startProgress();
 
     try {
       // validation unchanged...
@@ -378,7 +414,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           ),
         ),
       ];
-    
       // ⭐ MODIFIED — create Listing model
       final listing = Listing(
         listingId: listingId,
@@ -400,6 +435,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         ownerId: currentListing.ownerId,
         ownerName: currentListing.ownerName,
         claimStatus: "pending",
+        isDeleted: currentListing.isDeleted,
         verifiedBy: null,
         createdAt: currentListing.createdAt,
         updatedAt: DateTime.now(),
@@ -431,10 +467,19 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             .set(listing.toJson());
       }
 
+      finishProgress();
+
+      //draft issue cleared.....draft remove nhi ho rha tha shared preferences se
+      if (!widget.isEditing) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove("listingDraft");
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             widget.isEditing ? "Listing updated!" : "Contribution submitted!",
+            textAlign: TextAlign.center,
           ),
           backgroundColor: AppColors.GREEN,
         ),
@@ -451,7 +496,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
-      setState(() => _isLoading = false);
+      _progressIndicator?.cancel();
+      if (!mounted) {
+        setState(() {
+          _isLoading = false;
+          _progress = 0;
+        });
+      }
     }
   }
 
@@ -579,23 +630,20 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     required Map<String, double> factorRatings,
     required String comment,
   }) async {
-    
     if (AppAuthProvider.isAnonymousUser()) {
       CommonMethods.navigateToSignInScreen(context);
       return;
     }
 
     try {
-    
       final firestore = FirebaseFirestore.instance;
-      
+
       final user = FirebaseAuth.instance.currentUser!;
-      
+
       final listingRef = firestore
           .collection('listings')
           .doc(listing.listingId);
 
-     
       final countSnap =
           await listingRef
               .collection('reviews')
@@ -604,11 +652,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               .get();
 
       final reviewCount = countSnap.count ?? 0;
-    
 
       if (reviewCount >= 2) {
-      
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -719,6 +764,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     _pageController.dispose();
     _reviewController.dispose();
     _increaseViewCount();
+    _progressIndicator?.cancel();
     super.dispose();
   }
 
@@ -982,6 +1028,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   Widget _buildEngagementSection(Listing listing) {
+    // if (currentListing.isDeleted) {
+    //   return const SizedBox();
+    // }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       child: Container(
@@ -1294,6 +1343,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   Widget buildRatingsOverview(Listing listing) {
+    if (listing.isDeleted) {
+      return const SizedBox();
+    }
     if (widget.isPreview) {
       /// 🟡 PREVIEW MODE — use local listing object
       return _buildRatingsContentPreview(
@@ -1315,6 +1367,12 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData ||
+            !snapshot.data!.exists ||
+            snapshot.data!.data() == null) {
+          return const SizedBox();
         }
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
@@ -1705,6 +1763,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   Widget _buildReviews(Listing listing) {
+    if (currentListing.isDeleted) {
+      return const SizedBox();
+    }
     return StreamBuilder<QuerySnapshot>(
       stream:
           FirebaseFirestore.instance
@@ -1866,9 +1927,30 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          icon: Icon(widget.isEditing ? Icons.update : Icons.check),
-          label: Text(widget.isEditing ? "Update " : "Submit"),
+          icon:
+              _isLoading
+                  ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      value: _progress,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppColors.WHITE,
+                      ),
+                    ),
+                  )
+                  : Icon(widget.isEditing ? Icons.update : Icons.check),
+          label: Text(
+            _isLoading
+                ? "${(_progress * 100).toInt()}%"
+                : widget.isEditing
+                ? "Update "
+                : "Submit",
+          ),
+
           onPressed: () {
+            if (_isLoading) return;
             _submitContribution();
           },
         ),
@@ -1877,6 +1959,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   Widget _buildBottomButtons() {
+    if (currentListing.isDeleted) {
+      return const SizedBox();
+    }
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -1999,7 +2084,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
     // ✅ Step 1: Filter valid entries
     final validEntries = details.entries.toList();
-    
+
     // ✅ Step 2: If nothing valid → hide entire section
     if (validEntries.isEmpty) {
       return const SizedBox();
@@ -2228,6 +2313,170 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     );
   }
 
+  Future<void> _showDeleteDialog() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+
+          title: const Text("Delete Listing", textAlign: TextAlign.center),
+          content: const Text(
+            "Do You really want to delete this listing?",
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: const Text("Cancel", style: TextStyle(color: Colors.red)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.THEME_COLOR,
+              ),
+              onPressed: () {
+                Navigator.pop(context, true);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      "You can still access these listings in Deleted Listings section",
+                      textAlign: TextAlign.center,
+                    ),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              },
+              child: const Text(
+                "Continue",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      await _deleteListing();
+    }
+  }
+
+  Future<void> _deleteListing() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      await ListingDeletionService.deleteListing(currentListing.listingId);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Listing moved to Deleted Listings")),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to delete listing: $e")));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _restoreListing() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      await ListingDeletionService.restoreListing(currentListing.listingId);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Listing restored and moved to Pending Approvals"),
+        ),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to restore listing: $e")));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showRestoreDialog() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+
+          title: const Text("Restore Listing", textAlign: TextAlign.center),
+          content: const Text(
+            "This listing will be restored and moved to Pending Approvals.",
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: const Text("Cancel", style: TextStyle(color: Colors.red)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.THEME_COLOR,
+              ),
+              onPressed: () {
+                Navigator.pop(context, true);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      "You can still access these listings in Deleted Listings section",
+                      textAlign: TextAlign.center,
+                    ),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              },
+              child: const Text(
+                "Restore",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      await _restoreListing();
+    }
+  }
+
   // ---------- Main Build ----------
   @override
   Widget build(BuildContext context) {
@@ -2280,7 +2529,26 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                         );
                       },
                     ),
-                    if (!widget.isPreview && currentListing.verifiedBy == null)
+
+                    currentListing.isDeleted == true
+                        ? IconButton(
+                          onPressed: () {
+                            _showRestoreDialog();
+                          },
+                          icon: const Icon(Icons.restore, size: 25),
+                          visualDensity: VisualDensity.compact,
+                        )
+                        : IconButton(
+                          onPressed: () {
+                            _showDeleteDialog();
+                          },
+                          icon: Icon(Icons.delete),
+                          // visualDensity: VisualDensity.compact,
+                        ),
+
+                    if (!widget.isPreview &&
+                        currentListing.verifiedBy == null &&
+                        !currentListing.isDeleted)
                       _isApproving
                           ? SizedBox(
                             height: 35,
@@ -2891,6 +3159,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
                                               claimStatus:
                                                   currentListing.claimStatus,
+                                              isDeleted:
+                                                  currentListing.isDeleted,
                                               verifiedBy:
                                                   currentListing.verifiedBy,
                                               createdAt:
