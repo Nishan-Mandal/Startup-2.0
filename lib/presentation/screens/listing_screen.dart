@@ -174,21 +174,24 @@ class _ListingPageState extends State<ListingPage> {
                       controller: _scrollController,
                       padding: const EdgeInsets.all(15),
                       itemCount: listings.length,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 3 / 3.8,
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: 3 / 3.8,
+                          ),
                       itemBuilder: (context, index) {
-                                    
                         final listing = listings[index];
-                    
+
                         return GestureDetector(
                           onTap: () {
-                            if (widget.title == 'Pending Approvals') {
-                              CommonMethods.preloadListingImages(context, listing);
-                    
+                            if (widget.title == 'Pending Approvals' ||
+                                widget.title == "Deleted Listings") {
+                              CommonMethods.preloadListingImages(
+                                context,
+                                listing,
+                              );
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -198,8 +201,13 @@ class _ListingPageState extends State<ListingPage> {
                                         similarListings: listings,
                                       ),
                                 ),
-                              ).then((_) {
-                                setState(() {});
+                              ).then((deleted) async {
+                                if (deleted == true) {
+                                  listings.clear();
+                                  _lastCreatedAt = null;
+                                  _hasMore = true;
+                                  await _loadListings();
+                                }
                               });
                             } else {
                               CommonMethods.navigateToListingDetailScreen(
@@ -214,12 +222,12 @@ class _ListingPageState extends State<ListingPage> {
                       },
                     ),
                   ),
-                     if (_isLoading && listings.isNotEmpty)
-      if (_isLoading && listings.isNotEmpty)
-      const Padding(
-        padding: EdgeInsets.only(bottom: 20),
-        child: CircularProgressIndicator(),
-      ),
+                  if (_isLoading && listings.isNotEmpty)
+                    if (_isLoading && listings.isNotEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 20),
+                        child: CircularProgressIndicator(),
+                      ),
                 ],
               ),
     );
