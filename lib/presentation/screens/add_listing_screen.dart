@@ -571,11 +571,6 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
     final appUser = context.read<AppAuthProvider>().appUser;
 
-    /// ADD MODE
-    if (!isEditing) {
-      details.addAll(convertToStringMap(_categoryFormCtrl.values));
-    }
-
     /// COMMON FIELD
     final dynamic paymentValue =
         _detailedFormCtrl.values["Accept Online Payments"];
@@ -587,6 +582,15 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
     details["Accept Online Payments"] = acceptsOnlinePayments ? "Yes" : "No";
     detailsOrder.add("Accept Online Payments");
+
+    /// ADD MODE
+    if (!isEditing) {
+      final categoryDetails = convertToStringMap(_categoryFormCtrl.values);
+
+      details.addAll(categoryDetails);
+
+      detailsOrder.addAll(categoryDetails.keys);
+    }
 
     /// MANUAL FIELDS
     for (var field in _manualFields) {
