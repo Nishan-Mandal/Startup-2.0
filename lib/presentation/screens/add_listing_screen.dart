@@ -571,11 +571,6 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
     final appUser = context.read<AppAuthProvider>().appUser;
 
-    /// ADD MODE
-    if (!isEditing) {
-      details.addAll(convertToStringMap(_categoryFormCtrl.values));
-    }
-
     /// COMMON FIELD
     final dynamic paymentValue =
         _detailedFormCtrl.values["Accept Online Payments"];
@@ -588,6 +583,15 @@ class _AddListingScreenState extends State<AddListingScreen> {
     details["Accept Online Payments"] = acceptsOnlinePayments ? "Yes" : "No";
     detailsOrder.add("Accept Online Payments");
 
+    /// ADD MODE
+    if (!isEditing) {
+      final categoryDetails = convertToStringMap(_categoryFormCtrl.values);
+
+      details.addAll(categoryDetails);
+
+      detailsOrder.addAll(categoryDetails.keys);
+    }
+
     /// MANUAL FIELDS
     for (var field in _manualFields) {
       final key = field['key']?.text.trim() ?? '';
@@ -599,9 +603,15 @@ class _AddListingScreenState extends State<AddListingScreen> {
       }
     }
 
-    final Map<String, String> social = _socialFormCtrl.values.map(
-      (k, v) => MapEntry(k, v.toString()),
-    );
+    final Map<String, String> social = {};
+
+    _socialFormCtrl.values.forEach((key, value) {
+      final text = value?.toString().trim() ?? "";
+
+      if (text.isNotEmpty) {
+        social[key] = text;
+      }
+    });
 
     final listing = Listing(
       listingId: widget.existingListing?.listingId ?? 'draft',
@@ -667,7 +677,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
               : {},
 
       isClaimed: widget.existingListing?.isClaimed ?? false,
-
+      isDeleted: false,
       updatedBy: appUser?.name ?? "anonymous",
 
       claimStatus: widget.existingListing?.claimStatus ?? "draft",

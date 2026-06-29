@@ -125,6 +125,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appUser = context.read<AppAuthProvider>().appUser;
+
     if (isLoading) {
       return Scaffold(
         appBar: AppBar(
@@ -421,6 +423,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   );
                 }),
+                if (appUser?.role == 'admin')
+                  _buildTile(Icons.delete_rounded, "Deleted Listings", () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => ListingPage(
+                              title: "Deleted Listings",
+                              query: FirebaseFirestore.instance
+                                  .collection("deleted_listings")
+                                  .orderBy("deletedAt", descending: true),
+                            ),
+                      ),
+                    );
+                  }),
+
                 _buildTile(Icons.group_add, "My Referrals", () {}),
                 _buildTile(Icons.favorite, "Saved Services", () {
                   if (favIds != null && favIds!.isNotEmpty) {
@@ -451,13 +469,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     context,
                     MaterialPageRoute(
                       builder:
-                          (context) =>
-                              PremiumPlanCard(currentUser: currentUser, isDemo: true,),
+                          (context) => PremiumPlanCard(
+                            currentUser: currentUser,
+                            isDemo: true,
+                          ),
                     ),
                   );
                 }),
 
-                if (currentUser!.role == 'admin' || currentUser!.role == 'sales')
+                if (currentUser!.role == 'admin' ||
+                    currentUser!.role == 'sales')
                   _buildTile(Icons.key, "Manage Codes", () {
                     Navigator.push(
                       context,

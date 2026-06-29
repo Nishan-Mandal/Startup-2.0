@@ -24,7 +24,10 @@ class Listing {
   final String ownerId;
   final String ownerName;
   final String claimStatus;
-  final String? verifiedBy;
+  bool isDeleted;
+  DateTime? deletedAt;
+  String? deletedBy;
+  String? verifiedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<ImageFile> images;
@@ -62,6 +65,9 @@ class Listing {
     required this.ownerId,
     required this.ownerName,
     required this.claimStatus,
+    required this.isDeleted,
+    this.deletedAt,
+    this.deletedBy,
     this.verifiedBy,
     required this.createdAt,
     required this.updatedAt,
@@ -95,7 +101,10 @@ class Listing {
                 ),
               )
               : {},
-      detailsOrder: json['detailsOrder'] != null ? List<String>.from(json['detailsOrder']): [],
+      detailsOrder:
+          json['detailsOrder'] != null
+              ? List<String>.from(json['detailsOrder'])
+              : [],
       geo: Geo.fromJson(json['geo'] ?? {}),
       phone: json['phone'] ?? '',
       alternatePhone: json['alternatePhone'] ?? '',
@@ -109,6 +118,9 @@ class Listing {
       ownerId: json['ownerId'] ?? '',
       ownerName: json['ownerName'] ?? 'Unknown',
       claimStatus: json['claimStatus'] ?? 'unclaimed',
+      isDeleted: json['isDeleted'] ?? false,
+      deletedAt: _parseNullableDate(json['deletedAt']),
+      deletedBy: json['deletedBy'],
       verifiedBy: json['verifiedBy'],
       createdAt: _parseDate(json['createdAt']),
       updatedAt: _parseDate(json['updatedAt']),
@@ -159,7 +171,7 @@ class Listing {
       'address': address,
       'description': description,
       'details': details,
-      'detailsOrder':detailsOrder,
+      'detailsOrder': detailsOrder,
       'geo': geo.toJson(),
       'phone': phone,
       'email': email,
@@ -172,16 +184,23 @@ class Listing {
       'ownerId': ownerId,
       'ownerName': ownerName,
       'claimStatus': claimStatus,
+      'isDeleted': isDeleted,
+      'deletedAt': deletedAt == null?null:Timestamp.fromDate(deletedAt!),
+      'deletedBy': deletedBy,
       'verifiedBy': verifiedBy,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(updatedAt),
       'updatedBy': updatedBy,
       'images': images.map((e) => e.toJson()).toList(),
       // 'reviews': reviews,
+      // 'ratingCount': ratingCount,
       // 'rating': reviews,
       'since': since,
       // 'likes': likes,
       // 'views': views,
+      'isPremium': isPremium,
+      // 'ratingStats': ratingStats,
+      // 'factorsAvgRatings': factorAvgRatings,
       'social': social,
       'businessHours': businessHours.map(
         (day, schedule) => MapEntry(day, schedule.toJson()),
@@ -321,4 +340,20 @@ DateTime _parseDate(dynamic value) {
   }
 
   return DateTime.now();
+}
+
+DateTime? _parseNullableDate(dynamic value) {
+  if (value == null) return null;
+
+  if (value is Timestamp) return value.toDate();
+
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+
+  if (value is String) {
+    return DateTime.tryParse(value);
+  }
+
+  return null;
 }
