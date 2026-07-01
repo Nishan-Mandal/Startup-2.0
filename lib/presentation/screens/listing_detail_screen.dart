@@ -203,7 +203,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             .collection("listings")
             .where("category", isEqualTo: currentListing.category)
             .where("verifiedBy", isNull: false)
-            .where("isDeleted", isEqualTo: false)
             .orderBy("createdAt", descending: true)
             .get();
 
@@ -303,87 +302,144 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     }
   }
 
-  Future<Map<String, dynamic>> _uploadImage(File file, String listingId) async {
-    final storageRef = FirebaseStorage.instance.ref();
-    final fileId = const Uuid().v4();
+  // Future<Map<String, dynamic>> _uploadImage(File file, String listingId) async {
+  //   final storageRef = FirebaseStorage.instance.ref();
+  //   final fileId = const Uuid().v4();
 
-    // Full image compress
-    final Uint8List? fullData = await _compressImage(
-      file,
-      targetSize: 1280,
-      quality: 75,
-    );
+  //   // Full image compress
+  //   final Uint8List? fullData = await _compressImage(
+  //     file,
+  //     targetSize: 1280,
+  //     quality: 75,
+  //   );
 
-    // Thumbnail compress
-    final Uint8List? thumbData = await _compressImage(
-      file,
-      targetSize: 200,
-      quality: 50,
-    );
+  //   // Thumbnail compress
+  //   final Uint8List? thumbData = await _compressImage(
+  //     file,
+  //     targetSize: 200,
+  //     quality: 50,
+  //   );
 
-    // Upload full
-    final fullRef = storageRef.child("listings/$listingId/full_$fileId.webp");
-    await fullRef.putData(
-      fullData!,
-      SettableMetadata(contentType: "image/webp"),
-    );
-    final fullUrl = await fullRef.getDownloadURL();
+  //   // Upload full
+  //   final fullRef = storageRef.child("listings/$listingId/full_$fileId.webp");
+  //   await fullRef.putData(
+  //     fullData!,
+  //     SettableMetadata(contentType: "image/webp"),
+  //   );
+  //   final fullUrl = await fullRef.getDownloadURL();
 
-    // Upload thumbnail
-    final thumbRef = storageRef.child("listings/$listingId/thumb_$fileId.webp");
-    await thumbRef.putData(
-      thumbData!,
-      SettableMetadata(contentType: "image/webp"),
-    );
-    final thumbUrl = await thumbRef.getDownloadURL();
+  //   // Upload thumbnail
+  //   final thumbRef = storageRef.child("listings/$listingId/thumb_$fileId.webp");
+  //   await thumbRef.putData(
+  //     thumbData!,
+  //     SettableMetadata(contentType: "image/webp"),
+  //   );
+  //   final thumbUrl = await thumbRef.getDownloadURL();
 
-    return {"fileId": fileId, "fullUrl": fullUrl, "thumbUrl": thumbUrl};
+  //   return {"fileId": fileId, "fullUrl": fullUrl, "thumbUrl": thumbUrl};
+  // }
+
+  // Future<List<Map<String, dynamic>>> _uploadImages(
+  //   String listingId,
+  //   List<File> files,
+  // ) async {
+  //   return await Future.wait(
+  //     files.map((file) => _uploadImage(file, listingId)),
+  //   );
+  // }
+
+  final Map<String, int> _bytesTransferred = {};
+  int _totalBytes = 0;
+
+  void _updateOverallProgress() {
+    if (_totalBytes == 0 || !mounted) return;
+    final transferred = _bytesTransferred.values.fold<int>(0, (a, b) => a + b);
+    setState(() {
+      _progress = (transferred / _totalBytes).clamp(0.0, 1.0);
+    });
   }
 
   Future<List<Map<String, dynamic>>> _uploadImages(
     String listingId,
     List<File> files,
   ) async {
+    _bytesTransferred.clear();
+    _totalBytes = 0;
+
+    // parallel compression kr rhe hai
+    final compressedList = await Future.wait(
+      files.map((file) async {
+        final results = await Future.wait([
+          _compressImage(file, targetSize: 1280, quality: 75), //full image ke lie hai ye
+          _compressImage(file, targetSize: 200, quality: 50), //thumb image ke lie hai ye
+        ]);
+        return {"full": results[0]!, "thumb": results[1]!};
+      }),
+    );
+
+    // abb total kitne bytes transfer hua wo pta hai
+    _totalBytes = compressedList.fold<int>(
+      0,
+      (sum, item) =>
+          sum +
+          (item["full"] as Uint8List).length +
+          (item["thumb"] as Uint8List).length,
+    );
+
+    // parallel upload kr rhe hai, thumb aur full bhi parallely uplload ho rha hai
     return await Future.wait(
-      files.map((file) => _uploadImage(file, listingId)),
+      compressedList.map(
+        (item) => _uploadCompressed(
+          listingId,
+          item["full"] as Uint8List,
+          item["thumb"] as Uint8List,
+        ),
+      ),
     );
   }
 
-  void startProgress() {
-    _progress = 0;
+  Future<Map<String, dynamic>> _uploadCompressed(
+    String listingId,
+    Uint8List fullData,
+    Uint8List thumbData,
+  ) async {
+    final storageRef = FirebaseStorage.instance.ref();
+    final fileId = const Uuid().v4();
 
-    _progressIndicator?.cancel();
+    final fullRef = storageRef.child("listings/$listingId/full_$fileId.webp");
+    final thumbRef = storageRef.child("listings/$listingId/thumb_$fileId.webp");
 
-    _progressIndicator = Timer.periodic(const Duration(milliseconds: 120), (
-      timer,
-    ) {
-      if (!mounted) return;
+    final fullTask = fullRef.putData(
+      fullData,
+      SettableMetadata(contentType: "image/webp"),
+    );
+    final thumbTask = thumbRef.putData(
+      thumbData,
+      SettableMetadata(contentType: "image/webp"),
+    );
 
-      setState(() {
-        if (_progress < 0.9) {
-          _progress += 0.01;
-        } else {
-          timer.cancel();
-        }
-      });
+    fullTask.snapshotEvents.listen((s) {
+      _bytesTransferred["full_$fileId"] = s.bytesTransferred;
+      _updateOverallProgress();
     });
-  }
-
-  void finishProgress() {
-    _progressIndicator?.cancel();
-    if (!mounted) return;
-
-    setState(() {
-      _progress = 1.0;
+    thumbTask.snapshotEvents.listen((s) {
+      _bytesTransferred["thumb_$fileId"] = s.bytesTransferred;
+      _updateOverallProgress();
     });
+
+    await Future.wait([fullTask, thumbTask]);
+
+    final fullUrl = await fullRef.getDownloadURL();
+    final thumbUrl = await thumbRef.getDownloadURL();
+
+    return {"fileId": fileId, "fullUrl": fullUrl, "thumbUrl": thumbUrl};
   }
 
   /// Submit contribution
   Future<void> _submitContribution() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
-    startProgress();
-
+    _progress = 0;
     try {
       // validation unchanged...
 
@@ -467,7 +523,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             .set(listing.toJson());
       }
 
-      finishProgress();
+      setState(() {
+        _progress = 1;
+      });
 
       //draft issue cleared.....draft remove nhi ho rha tha shared preferences se
       if (!widget.isEditing) {
