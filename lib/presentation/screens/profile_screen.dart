@@ -9,9 +9,9 @@ import 'package:startup_20/presentation/screens/admin_code_screen.dart';
 import 'package:startup_20/presentation/screens/legal_page_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
-import 'package:startup_20/presentation/screens/plan_screen.dart';
 import 'package:startup_20/presentation/screens/transaction_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -465,16 +465,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }),
 
                 _buildTile(Icons.workspace_premium, "Manage Campaigns", () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder:
-                          (context) => PremiumPlanCard(
-                            currentUser: currentUser,
-                            isDemo: true,
-                          ),
-                    ),
-                  );
+                  CommonMethods.launchWebsite('https://needmet-digital.web.app/');
                 }),
 
                 if (currentUser!.role == 'admin' ||
@@ -591,11 +582,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildTile(IconData icon, String text, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(icon, color: AppColors.THEME_COLOR),
-      title: Text(text),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: onTap,
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        leading: Icon(icon, color: AppColors.THEME_COLOR),
+        title: Text(text),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
     );
   }
 }

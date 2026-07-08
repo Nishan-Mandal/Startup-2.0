@@ -197,6 +197,13 @@ class CommonMethods {
     }
   }
 
+  static void launchWebsite(String urlString) async {
+    final uri = Uri.parse(urlString);
+    if (!await launchUrl(uri)) {
+      throw 'could not launch $uri';
+    }
+  }
+
   static void openWhatsApp(String phone) async {
     // Remove spaces, dashes, brackets etc.
     String normalized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
