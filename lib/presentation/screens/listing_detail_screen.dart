@@ -19,7 +19,6 @@ import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/add_listing_screen.dart';
 import 'package:startup_20/presentation/screens/conversation/chat_room_screen.dart';
-import 'package:startup_20/presentation/screens/plan_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
@@ -543,10 +542,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         ),
       );
 
-      Navigator.pop(context);
-      Navigator.pop(context);
+      Navigator.pop(context, true);
+      Navigator.pop(context, true);
       if (widget.isEditing) {
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       debugPrint("Error: $e");
@@ -2724,16 +2723,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 } else if (value == "report") {
                   _showReportPopup('listing', currentListing.listingId, '');
                 } else if (value == 'Manage Campaigns') {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder:
-                          (context) => PremiumPlanCard(
-                            currentUser: listingUser,
-                            isDemo: false,
-                          ),
-                    ),
-                  );
+                  CommonMethods.launchWebsite('https://needmet-digital.web.app/');
+                  
                 } else if (value == "Change Owner") {
                   _showChangeOwnerBottomSheet();
                 }

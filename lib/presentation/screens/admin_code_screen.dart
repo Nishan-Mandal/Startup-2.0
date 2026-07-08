@@ -24,6 +24,8 @@ class _AdminCodeScreenState extends State<AdminCodeScreen>
 
   final TextEditingController discountController = TextEditingController();
   final TextEditingController cashAmountController = TextEditingController();
+  final Map<String, TextEditingController> _priceController = {};
+  final Map<String, bool> _updatingPlans = {};
   String selectedPaymentMode = "one_time";
 
   @override
@@ -36,6 +38,9 @@ class _AdminCodeScreenState extends State<AdminCodeScreen>
   void dispose() {
     discountController.dispose();
     cashAmountController.dispose();
+    for (final controller in _priceController.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -513,13 +518,39 @@ class _AdminCodeScreenState extends State<AdminCodeScreen>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  Widget _serviceCard(String docId, Map<String, dynamic> data) {
+    final plans = List<Map<String, dynamic>>.from(data['plans'] ?? []);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              data['title'],
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+            ),
+          ),
+          ...plans.asMap().entries.map((entry) {
+            return _planCard(docId, data, entry.key);
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
   Widget _planSection() {
     return StreamBuilder<QuerySnapshot>(
-      stream:
-          FirebaseFirestore.instance
-              .collection('plans')
-              .orderBy('planName')
-              .snapshots(),
+      stream: FirebaseFirestore.instance.collection('services').snapshots(),
 
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
@@ -540,86 +571,131 @@ class _AdminCodeScreenState extends State<AdminCodeScreen>
             final doc = docs[index];
 
             final data = doc.data() as Map<String, dynamic>;
-
-            return _planCard(doc.id, data);
+            return _serviceCard(doc.id, data);
           },
         );
       },
     );
   }
 
-  Widget _planCard(String docId, Map<String, dynamic> data) {
-    final controller = TextEditingController(
-      text: (data['price'] ?? 0).toString(),
+  Widget _planCard(String docId, Map<String, dynamic> data, int planIndex) {
+    final plans = List<Map<String, dynamic>>.from(data['plans']);
+
+    final controllerKey = "$docId-$planIndex";
+
+    final isUpdating = _updatingPlans[controllerKey] ?? false;
+
+    final controller = _priceController.putIfAbsent(
+      controllerKey,
+      () => TextEditingController(text: plans[planIndex]['price'].toString()),
     );
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+    final latestPrice = plans[planIndex]['price'].toString();
 
-      padding: const EdgeInsets.all(16),
+    if (controller.text != latestPrice) {
+      controller.value = TextEditingValue(
+        text: latestPrice,
+        selection: TextSelection.collapsed(offset: latestPrice.length),
+      );
+    }
 
-      decoration: BoxDecoration(
-        color: Colors.white,
-
-        borderRadius: BorderRadius.circular(14),
-      ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-
-        children: [
-          Text(
-            data['planName'] ?? '',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Material(
+        color: Colors.transparent,
+        child: ExpansionTile(
+          expansionAnimationStyle: AnimationStyle(
+            curve: Curves.easeIn,
+            duration: Duration(milliseconds: 250),
+            reverseDuration: Duration(milliseconds: 300),
           ),
-
-          const SizedBox(height: 4),
-
-          Text(
-            data['durationInMonths'] ?? '',
-            style: TextStyle(color: Colors.grey.shade600),
+          title: Text(
+            plans[planIndex]['name'],
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
           ),
-
-          const SizedBox(height: 16),
-
-          TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-
-            decoration: const InputDecoration(
-              labelText: "Price",
-              prefixText: "₹ ",
+          childrenPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 10,
+          ),
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  plans[planIndex]['duration'],
+                  style: TextStyle(
+                    color: AppColors.GREEN,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  textBaseline: TextBaseline.alphabetic,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      child: TextField(
+                        controller: controller,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: "Price",
+                          prefixText: "₹ ",
+                        ),
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      icon: isUpdating ? null : const Icon(Icons.save),
+                      label:
+                          isUpdating
+                              ? const Text("Updating..")
+                              : const Text("Update"),
+                      onPressed: () async {
+                        
+                        if (isUpdating) {
+                          return;
+                        }
+                        final price = int.tryParse(controller.text.trim());
+        
+                        if (price == null) {
+                          _showSnack("Invalid Price");
+                          return;
+                        }
+        
+                        setState(() {
+                          _updatingPlans[controllerKey] = true;
+                        });
+                        try {
+                          final plans = List<Map<String, dynamic>>.from(
+                            data['plans'],
+                          );
+        
+                          plans[planIndex]['price'] = price;
+        
+                          await FirebaseFirestore.instance
+                              .collection("services")
+                              .doc(docId)
+                              .update({"plans": plans});
+        
+                          _showSnack("Plan Updated ✅");
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              _updatingPlans[controllerKey] = false;
+                            });
+                          }
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
             ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Align(
-            alignment: Alignment.centerRight,
-
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.save),
-
-              label: const Text("Update"),
-
-              onPressed: () async {
-                final price = int.tryParse(controller.text.trim());
-
-                if (price == null) {
-                  _showSnack("Invalid Price");
-                  return;
-                }
-
-                await FirebaseFirestore.instance
-                    .collection('plans')
-                    .doc(docId)
-                    .update({'price': price});
-
-                _showSnack("Plan Updated ✅");
-              },
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
