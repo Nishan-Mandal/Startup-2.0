@@ -195,14 +195,14 @@ class _ListingPageState extends State<ListingPage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder:
+                                  builder: 
                                       (context) => ListingDetailScreen(
                                         listing: listing,
                                         similarListings: listings,
                                       ),
                                 ),
-                              ).then((deleted) async {
-                                if (deleted == true) {
+                              ).then((result) async {
+                                if (result == true) {
                                   listings.clear();
                                   _lastCreatedAt = null;
                                   _hasMore = true;
