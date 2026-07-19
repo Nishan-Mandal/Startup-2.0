@@ -34,6 +34,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
   List<Category> categoryResults = [];
   List<Listing> listingResults = [];
+  List<String> tagResults = [];
+  bool showSuggestions = true;
 
   @override
   void initState() {
@@ -56,6 +58,23 @@ class _SearchScreenState extends State<SearchScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('recentSearches', recentSearches);
   }
+  Future<void> _addRecentSearch(String term) async {
+    final value = term.trim();
+    if (value.isEmpty) return;
+    setState(() {
+
+      recentSearches.remove(value); // duplicate htane ke lie add kie hain
+      recentSearches.insert(0, value); // hrr baar most recent search upar rhega
+      
+      if (recentSearches.length > 10) {
+        recentSearches = recentSearches.take(10).toList();
+      }
+
+      sessionSearches.remove(value);
+      sessionSearches.add(value);
+    });
+    await _saveRecentSearches();
+  }
 
   /// 🔹 Remove a specific search term
   Future<void> _removeRecentSearch(String term) async {
@@ -72,12 +91,14 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   /// Firestore Search
-  Future<void> _search(String text) async {
+  Future<void> _search(String text, {bool showTagSuggestions = true}) async {
     if (text.isEmpty) {
       setState(() {
         query = "";
         listingResults = [];
         categoryResults = [];
+        tagResults = [];
+        showSuggestions = showTagSuggestions;
         isLoading = false;
       });
       return;
@@ -86,6 +107,7 @@ class _SearchScreenState extends State<SearchScreen> {
     setState(() {
       isLoading = true;
       query = text;
+      showSuggestions = showTagSuggestions;
     });
 
     final appUser = context.read<AppAuthProvider>().appUser;
@@ -100,6 +122,18 @@ class _SearchScreenState extends State<SearchScreen> {
 
       final listingHits = results[0];
       final categoryHits = results[1];
+
+      final Set<String> matchedTags = {};
+
+      for (final hit in listingHits) {
+        final tags = List<String>.from(hit['tags'] ?? []);
+
+        for (final tag in tags) {
+          if (tag.toLowerCase().contains(text.toLowerCase())) {
+            matchedTags.add(tag);
+          }
+        }
+      }
 
       // 🔹 Extract listing IDs
       final ids =
@@ -154,7 +188,8 @@ class _SearchScreenState extends State<SearchScreen> {
       // 🔹 Update UI
       setState(() {
         listingResults = filteredListings;
-        categoryResults = categories;
+        categoryResults = categories.take(6).toList();
+        tagResults = matchedTags.take(6).toList();
         isLoading = false;
       });
     } catch (e, stackTrace) {
@@ -276,8 +311,6 @@ class _SearchScreenState extends State<SearchScreen> {
                   ],
                 ),
 
-              const SizedBox(height: 16),
-
               // 🔹 Results Section
               Expanded(
                 child:
@@ -343,76 +376,126 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Categories",
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.BLACK_54,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (categoryResults.isEmpty) const Text("No categories found."),
-          ...categoryResults.map((category) {
-            return ListTile(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (context) => ListingPage(
-                          title: category.name,
-                          query: FirebaseFirestore.instance
-                              .collection("listings")
-                              .where("category", isEqualTo: category.name)
-                              .where("verifiedBy", isNull: false)
-                              .orderBy("createdAt", descending: true),
-                        ),
-                  ),
-                );
-              },
-              leading: SizedBox(
-                width: 30,
-                height: 30,
-                child: CachedNetworkSvg(url: category.imageUrl),
-              ),
-              title: Text(category.name),
-            );
-          }),
-          const SizedBox(height: 20),
-          const Text(
-            "Listings",
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.BLACK_54,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (listingResults.isEmpty) const Text("No listings found."),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: listingResults.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-            ),
-            itemBuilder: (context, index) {
-              final listing = listingResults[index];
-              return GestureDetector(
-                onTap:
-                    () => CommonMethods.navigateToListingDetailScreen(
-                      context,
-                      listing,
-                      [],
+          if (listingResults.isEmpty && categoryResults.isEmpty)
+            const Center(
+              child: Column(
+                children: [
+                  SizedBox(height: 15),
+                  Text(
+                    "Uh-oh!",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.BLACK_54,
                     ),
-                child: CommonWidgets.listingCard(listing),
-              );
-            },
-          ),
+                  ),
+                  Text(
+                    "No results found!",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.BLACK_54,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            if (showSuggestions && tagResults.isNotEmpty) ...[
+              ...tagResults.map((tag) {
+                return ListTile(
+                  contentPadding: EdgeInsets.only(left: 2),
+                  leading: CircleAvatar(
+                    backgroundColor: AppColors.GREY_SHADE_300,
+                    child: Icon(
+                      Icons.search_rounded,
+                      color: AppColors.THEME_COLOR,
+                    ),
+                  ),
+                  title: Text(tag),
+                  onTap: () async {
+                    _controller.text = tag;
+                    await _addRecentSearch(tag);
+                    _search(tag, showTagSuggestions: false);
+                  },
+                );
+              }),
+
+              const SizedBox(height: 20),
+            ],
+            if (categoryResults.isNotEmpty) ...[
+              const Text(
+                "Categories",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.BLACK_54,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...categoryResults.map((category) {
+                return ListTile(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => ListingPage(
+                              title: category.name,
+                              query: FirebaseFirestore.instance
+                                  .collection("listings")
+                                  .where("category", isEqualTo: category.name)
+                                  .where("verifiedBy", isNull: false)
+                                  .orderBy("createdAt", descending: true),
+                            ),
+                      ),
+                    );
+                  },
+                  leading: SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: CachedNetworkSvg(url: category.imageUrl),
+                  ),
+                  title: Text(category.name),
+                );
+              }),
+              const SizedBox(height: 20),
+            ],
+            if (listingResults.isNotEmpty) ...[
+              const Text(
+                "Listings",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.BLACK_54,
+                ),
+              ),
+              const SizedBox(height: 10),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: listingResults.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.75,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemBuilder: (context, index) {
+                  final listing = listingResults[index];
+                  return GestureDetector(
+                    onTap:
+                        () => CommonMethods.navigateToListingDetailScreen(
+                          context,
+                          listing,
+                          [],
+                        ),
+                    child: CommonWidgets.listingCard(listing),
+                  );
+                },
+              ),
+            ],
+          ],
         ],
       ),
     );
