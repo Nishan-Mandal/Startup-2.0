@@ -275,17 +275,6 @@ class _ContributionScreenState extends State<ContributionScreen> {
                     alignment: Alignment.center,
                     child: TextButton(
                       onPressed: () {
-                        if (!AppAuthProvider.isAnonymousUser() &&
-                            currentUser?.role == 'admin') {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ListingMapScreen(),
-                            ),
-                          );
-                          return;
-                        }
-
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(
