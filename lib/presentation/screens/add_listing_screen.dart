@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +11,7 @@ import 'package:startup_20/data/models/category_field_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/category_cache_service.dart';
 import 'package:startup_20/presentation/common_methods/location_picker.dart';
+import 'package:startup_20/presentation/common_methods/searchable_dropdown.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/data/models/category_model.dart' as models;
 import 'package:startup_20/providers/auth_provider.dart';
@@ -1563,141 +1562,6 @@ class _AddListingScreenState extends State<AddListingScreen> {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Center(child: Text(label, style: const TextStyle(fontSize: 15))),
-      ),
-    );
-  }
-}
-
-class SearchableDropdown extends StatefulWidget {
-  final List<models.Category> categories;
-  final Function(String, String) onCategorySelected;
-
-  final String? selectedCategoryName;
-  final String? selectedCategoryId;
-
-  const SearchableDropdown({
-    super.key,
-    required this.categories,
-    required this.onCategorySelected,
-    required this.selectedCategoryId,
-    required this.selectedCategoryName,
-  });
-
-  @override
-  State<SearchableDropdown> createState() => _SearchableDropdownState();
-}
-
-class _SearchableDropdownState extends State<SearchableDropdown> {
-  final TextEditingController _searchController = TextEditingController();
-
-  void _openSearchDialog() async {
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) {
-        List<models.Category> filtered = widget.categories;
-
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text("Select Category"),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: _searchController,
-                      decoration: const InputDecoration(
-                        hintText: "Search category...",
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (query) {
-                        setStateDialog(() {
-                          filtered =
-                              widget.categories
-                                  .where(
-                                    (cat) => cat.name.toLowerCase().contains(
-                                      query.toLowerCase(),
-                                    ),
-                                  )
-                                  .toList();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.4,
-                      width: double.maxFinite,
-                      child: ListView.builder(
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          models.Category cat = filtered[index];
-                          return ListTile(
-                            leading: SizedBox(
-                              width: 30,
-                              height: 30,
-                              child: SvgPicture.network(
-                                cat.imageUrl,
-                                height: 10,
-                                width: 10,
-                              ),
-                            ),
-                            title: Text(cat.name),
-                            onTap: () {
-                              Navigator.pop(context, {
-                                'id': cat.id,
-                                'name': cat.name,
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel"),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (result != null) {
-      widget.onCategorySelected(result['id'] ?? '', result['name'] ?? '');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _openSearchDialog,
-      child: InputDecorator(
-        decoration: const InputDecoration(
-          labelText: "*Category",
-          border: OutlineInputBorder(),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                widget.selectedCategoryName ?? "Select Category",
-                style: TextStyle(
-                  color:
-                      widget.selectedCategoryName == null
-                          ? Colors.grey
-                          : Colors.black,
-                ),
-              ),
-            ),
-            const Icon(Icons.arrow_drop_down),
-          ],
-        ),
       ),
     );
   }

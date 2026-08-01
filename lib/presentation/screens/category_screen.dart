@@ -1,9 +1,9 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/category_model.dart';
-import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/category_cache_service.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
@@ -23,12 +23,16 @@ class _CategoryScreenState extends State<CategoryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCategories();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCategories();
+    });
   }
 
   Future<void> _loadCategories() async {
     try {
-      final categories = await CategoryCacheService.getCategories();
+      // final categories = await CategoryCacheService.getCategories();
+      final categories = await CategoryCacheService.refreshCategories();
 
       if (!mounted) return;
 
@@ -162,20 +166,11 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     ),
                     child:
                         category.imageUrl.isNotEmpty
-                            ? CachedNetworkSvg(
-                              url: category.imageUrl,
+                            ? CachedNetworkImage(
+                              imageUrl: category.imageUrl,
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
-                              // show your shimmer while loading
-                              placeholder: Shimmer.fromColors(
-                                baseColor: AppColors.GREY_SHADE_300,
-                                highlightColor: AppColors.GREY_SHADE_100,
-                                child: Container(
-                                  color: AppColors.GREY_SHADE_300,
-                                ),
-                              ),
-                              errorWidget: const Icon(Icons.broken_image),
                             )
                             : const Icon(
                               Icons.image_not_supported,
