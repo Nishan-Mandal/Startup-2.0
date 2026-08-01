@@ -7,7 +7,6 @@ import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/home_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
-import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
@@ -254,7 +253,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               ///SliverGrid directly (NO wrapper widget)
               _categoriesTab(homeData.categories),
-
               SliverToBoxAdapter(child: const SizedBox(height: 20)),
 
               /// Featured ads section
@@ -541,13 +539,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10), // match container
-                    child: CachedNetworkSvg(
-                      url: category.imageUrl,
+                    child: CachedNetworkImage(
+                      imageUrl: category.imageUrl,
                       fit: BoxFit.cover,
                       width: double.infinity,
                       height: double.infinity,
-                      placeholder: Container(color: AppColors.GREY_SHADE_100),
-                      errorWidget: const Icon(Icons.broken_image),
                     ),
                   ),
                 ),

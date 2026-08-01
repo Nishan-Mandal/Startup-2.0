@@ -7,11 +7,11 @@ import 'package:startup_20/data/models/user_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/screens/admin_code_screen.dart';
 import 'package:startup_20/presentation/screens/legal_page_screen.dart';
+import 'package:startup_20/presentation/screens/listing_map_screen.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/transaction_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -356,7 +356,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 6),
 
               // 💰 Kudos Wallet
               Container(
@@ -401,7 +401,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
 
               /// 🔹 My Activity Section
               _buildSection("My Activity", [
@@ -465,7 +465,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }),
 
                 _buildTile(Icons.workspace_premium, "Manage Campaigns", () {
-                  CommonMethods.launchWebsite('https://needmet-digital.web.app/');
+                  CommonMethods.launchWebsite(
+                    'https://needmet-digital.web.app/',
+                  );
                 }),
 
                 if (currentUser!.role == 'admin' ||
@@ -489,6 +491,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   );
                 }),
+
+                if (currentUser!.role == 'admin')
+                  _buildTile(Icons.location_on_outlined, "Listing Map", () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ListingMapScreen(),
+                      ),
+                    );
+                  }),
               ]),
 
               /// 🔹 Rewards Section

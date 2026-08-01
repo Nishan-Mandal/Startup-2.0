@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,7 +10,6 @@ import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/core/services/algolia_service.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/category_model.dart';
-import 'package:startup_20/presentation/common_methods/cached_network_svg.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
@@ -62,10 +62,8 @@ class _SearchScreenState extends State<SearchScreen> {
     final value = term.trim();
     if (value.isEmpty) return;
     setState(() {
-
       recentSearches.remove(value); // duplicate htane ke lie add kie hain
       recentSearches.insert(0, value); // hrr baar most recent search upar rhega
-      
       if (recentSearches.length > 10) {
         recentSearches = recentSearches.take(10).toList();
       }
@@ -293,19 +291,54 @@ class _SearchScreenState extends State<SearchScreen> {
                       spacing: 8,
                       children:
                           recentSearches.map((item) {
-                            return InputChip(
-                              label: Text(item),
-                              backgroundColor: AppColors.GREY_SHADE_100,
-                              onPressed: () {
-                                _controller.text = item;
-                                _search(item);
-                              },
-                              deleteIcon: const Icon(Icons.close, size: 18),
-                              onDeleted: () async {
-                                // Remove from list
-                                _removeRecentSearch(item);
-                              },
+                            return Theme(
+                              data: Theme.of(context).copyWith(
+                                splashColor: Colors.transparent,
+                                highlightColor: Colors.transparent,
+                                splashFactory: NoSplash.splashFactory,
+                              ),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.only(
+                                  left: 2,
+                                  right: 4,
+                                ),
+                                leading: CircleAvatar(
+                                  backgroundColor: AppColors.GREY_SHADE_300,
+                                  child: Icon(
+                                    Icons.rotate_90_degrees_cw_outlined,
+                                    color: AppColors.THEME_COLOR,
+                                  ),
+                                ),
+                                trailing: IconButton(
+                                  onPressed: () async {
+                                    _removeRecentSearch(item);
+                                  },
+                                  icon: Icon(Icons.close),
+                                ),
+                                title: Text(item),
+                                onTap: () async {
+                                  _controller.text = item;
+                                  _search(item, showTagSuggestions: false);
+                                },
+                              ),
                             );
+                            // InputChip(
+                            //   avatar: Icon(
+                            //     Icons.rotate_90_degrees_cw_outlined,
+                            //     color: AppColors.THEME_COLOR,
+                            //   ),
+                            //   label: Text(item),
+                            //   backgroundColor: AppColors.GREY_SHADE_100,
+                            //   onPressed: () {
+                            //     _controller.text = item;
+                            //     _search(item);
+                            //   },
+                            //   deleteIcon: const Icon(Icons.close, size: 18),
+                            //   onDeleted: () async {
+                            //     // Remove from list
+                            //     _removeRecentSearch(item);
+                            //   },
+                            // );
                           }).toList(),
                     ),
                   ],
@@ -403,21 +436,28 @@ class _SearchScreenState extends State<SearchScreen> {
           else ...[
             if (showSuggestions && tagResults.isNotEmpty) ...[
               ...tagResults.map((tag) {
-                return ListTile(
-                  contentPadding: EdgeInsets.only(left: 2),
-                  leading: CircleAvatar(
-                    backgroundColor: AppColors.GREY_SHADE_300,
-                    child: Icon(
-                      Icons.search_rounded,
-                      color: AppColors.THEME_COLOR,
-                    ),
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                    splashFactory: NoSplash.splashFactory,
                   ),
-                  title: Text(tag),
-                  onTap: () async {
-                    _controller.text = tag;
-                    await _addRecentSearch(tag);
-                    _search(tag, showTagSuggestions: false);
-                  },
+                  child: ListTile(
+                    contentPadding: EdgeInsets.only(left: 2),
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.GREY_SHADE_300,
+                      child: Icon(
+                        Icons.search_rounded,
+                        color: AppColors.THEME_COLOR,
+                      ),
+                    ),
+                    title: Text(tag),
+                    onTap: () async {
+                      _controller.text = tag;
+                      await _addRecentSearch(tag);
+                      _search(tag, showTagSuggestions: false);
+                    },
+                  ),
                 );
               }),
 
@@ -454,7 +494,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   leading: SizedBox(
                     width: 30,
                     height: 30,
-                    child: CachedNetworkSvg(url: category.imageUrl),
+                    child: CachedNetworkImage(imageUrl: category.imageUrl),
                   ),
                   title: Text(category.name),
                 );
