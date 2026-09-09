@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,8 +10,10 @@ import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/core/constants/category_field_schema.dart';
 import 'package:startup_20/data/models/category_field_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
+import 'package:startup_20/presentation/common_methods/ai_tag_service.dart';
 import 'package:startup_20/presentation/common_methods/category_cache_service.dart';
 import 'package:startup_20/presentation/common_methods/location_picker.dart';
+
 import 'package:startup_20/presentation/common_methods/searchable_dropdown.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/data/models/category_model.dart' as models;
@@ -79,6 +82,8 @@ class _AddListingScreenState extends State<AddListingScreen> {
   };
 
   Set<String> _selectedTags = {};
+  List<String> _aiSuggestedTags = [];
+  bool _isSuggestingTags = false;
   final TextEditingController _tagController = TextEditingController();
 
   @override
@@ -1167,6 +1172,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   _selectedCategoryId = id;
                   _selectedCategoryName = name;
                   _onCategorySelected(name);
+                  _aiSuggestedTags = [];
                 });
               },
             ),
@@ -1258,6 +1264,83 @@ class _AddListingScreenState extends State<AddListingScreen> {
     );
   }
 
+  Map<String, dynamic> _buildAiTagInput() {
+    final manualDetails = <String, dynamic>{};
+
+    for (final field in _manualFields) {
+      final key = field['key']?.text.trim() ?? '';
+      final value = field['value']?.text.trim() ?? '';
+
+      if (key.isNotEmpty && value.isNotEmpty) {
+        manualDetails[key] = value;
+      }
+    }
+
+    return {
+      "category": _selectedCategoryName ?? '',
+      "address": _addressController.text.trim(),
+
+      "existingTags": _selectedTags.toList(),
+      "basicDetails": Map<String, dynamic>.from(_basicFormCtrl.values),
+
+      "detailedDetails": Map<String, dynamic>.from(_detailedFormCtrl.values),
+
+      "categoryDetails": Map<String, dynamic>.from(_categoryFormCtrl.values),
+
+      "customDetails": manualDetails,
+
+      "description":
+          _detailedFormCtrl.values['Description']?.toString().trim() ?? '',
+    };
+  }
+
+  Future<void> _suggestTags() async {
+    debugPrint("Called Suggestions");
+    setState(() {
+      _isSuggestingTags = true;
+      _aiSuggestedTags = [];
+    });
+
+    final listingData = _buildAiTagInput();
+
+    debugPrint("CURRENT USER: ${FirebaseAuth.instance.currentUser?.uid}");
+    debugPrint("AI Tag INPUT -> ");
+    debugPrint(jsonEncode(listingData));
+
+    try {
+      final tags = await AiTagService.generateTags(listingData: listingData);
+
+      if (!mounted) return;
+
+      // Show tags one by one for a more interactive experience.
+      for (final tag in tags) {
+        if (!mounted) return;
+
+        setState(() {
+          _aiSuggestedTags.add(tag);
+        });
+
+        await Future.delayed(const Duration(milliseconds: 250));
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _isSuggestingTags = false;
+      });
+    } catch (e) {
+      debugPrint("AI Tag Error: $e");
+
+      if (!mounted) return;
+
+      setState(() {
+        _isSuggestingTags = false;
+      });
+
+      _showError("Unable to suggest tags right now, kindly check your network");
+    }
+  }
+
   Widget _stepTagging() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1322,7 +1405,88 @@ class _AddListingScreenState extends State<AddListingScreen> {
                   }).toList(),
             ),
           ],
+
+          // if (_aiSuggestedTags.any((tag) => !_selectedTags.contains(tag))) ...[
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              disabledBackgroundColor: AppColors.THEME_COLOR,
+              // disabledForegroundColor: AppColors.THEME_COLOR,
+              backgroundColor: AppColors.THEME_COLOR,
+              foregroundColor: AppColors.WHITE,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 22),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
+              ),
+            ),
+            icon:
+                _isSuggestingTags
+                    ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          AppColors.WHITE,
+                        ),
+                      ),
+                    )
+                    : Icon(Icons.auto_awesome_sharp, color: AppColors.WHITE),
+            label:
+                _isSuggestingTags
+                    ? SizedBox(
+                      width: 88,
+                      child: AnimatedTextKit(
+                        repeatForever: true,
+                        pause: Duration(milliseconds: 100),
+                        animatedTexts: [
+                          FadeAnimatedText(
+                            "Suggesting...",
+                            textStyle: TextStyle(color: AppColors.WHITE),
+                          ),
+                          FadeAnimatedText(
+                            "Sit Tight....",
+                            textStyle: TextStyle(color: AppColors.WHITE),
+                          ),
+                        ],
+                      ),
+                    )
+                    : Text("Suggest Tags"),
+
+            onPressed: _isSuggestingTags ? null : _suggestTags,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children:
+                _aiSuggestedTags
+                    .where((tag) => !_selectedTags.contains(tag))
+                    .map((tag) {
+                      final isSelected = _selectedTags.contains(tag);
+
+                      return FilterChip(
+                        label: Text(tag),
+                        selected: isSelected,
+                        onSelected: (_) {
+                          setState(() {
+                            isSelected
+                                ? _selectedTags.remove(tag)
+                                : _selectedTags.add(tag);
+                          });
+                        },
+                        deleteIcon: const Icon(Icons.close),
+                        onDeleted: () {
+                          setState(() {
+                            _aiSuggestedTags.remove(tag);
+                          });
+                        },
+                      );
+                    })
+                    .toList(),
+          ),
         ],
+        // ],
       ),
     );
   }
