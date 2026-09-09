@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/data/models/category_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
+import 'package:startup_20/presentation/common_methods/searchable_dropdown.dart';
 
 /* --------------------------------------------------------
    LISTING MAP SCREEN
@@ -30,13 +29,16 @@ class _ListingMapScreenState extends State<ListingMapScreen> {
 
   List<Listing> _allListings = [];
   String _selectedCategory = 'All Categories';
+  int _filterRequestId = 0;
 
   List<Category> _categories = [];
+  final Map<String, String> _catIconsURL = {};
 
   bool _categoriesLoading = true;
 
   /// Cache marker icons by image URL
   final Map<String, BitmapDescriptor> _markerCache = {};
+  final Map<String, Future<BitmapDescriptor>> _markerFutureCache = {};
 
   @override
   void initState() {
@@ -55,15 +57,33 @@ class _ListingMapScreenState extends State<ListingMapScreen> {
             (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
 
-      if (mounted) {
-        setState(() {
-          _categories = fetched;
-          _categoriesLoading = false;
-        });
+      if (!mounted) return;
+
+      setState(() {
+        _categories = fetched;
+
+        _catIconsURL.clear();
+
+        for (final cat in fetched) {
+          _catIconsURL[cat.name.trim().toLowerCase()] = cat.imageUrl;
+        }
+
+        _categoriesLoading = false;
+      });
+
+      // Listings may have loaded before categories.
+      // Rebuild markers now that category icons are ready.
+      if (_allListings.isNotEmpty) {
+        await _applyCategoryFilter();
       }
     } catch (e) {
       debugPrint('Failed to fetch categories: $e');
-      setState(() => _categoriesLoading = false);
+
+      if (mounted) {
+        setState(() {
+          _categoriesLoading = false;
+        });
+      }
     }
   }
 
@@ -78,70 +98,145 @@ class _ListingMapScreenState extends State<ListingMapScreen> {
     });
   }
 
-  Future<Set<Marker>> _buildMarkers(List<Listing> listings) async {
-    final markers = <Marker>{};
-
-    for (final listing in listings) {
-      markers.add(
-        Marker(
-          markerId: MarkerId(listing.listingId),
-          position: LatLng(listing.geo.lat, listing.geo.lng),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          onTap: () async {
-            setState(() {
-              _selectedListing = listing;
-            });
-            await _animateToListing(listing);
-          },
-        ),
-      );
-    }
-
-    // Load custom markers in background
-    _loadCustomMarkers(listings);
-
-    return markers;
-  }
-
-  Future<void> _loadCustomMarkers(List<Listing> listings) async {
-    for (final listing in listings) {
-      if (listing.images.isEmpty) continue;
-
-      final icon = await _getCustomMarker(listing.images.first.thumbUrl);
-
-      final marker = Marker(
+  Set<Marker> _buildDefaultMarkers(List<Listing> listings) {
+    return listings.map((listing) {
+      return Marker(
         markerId: MarkerId(listing.listingId),
         position: LatLng(listing.geo.lat, listing.geo.lng),
-        icon: icon,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         onTap: () async {
+          if (!mounted) return;
+
           setState(() {
             _selectedListing = listing;
           });
+
           await _animateToListing(listing);
         },
       );
-
-      if (!mounted) return;
-
-      setState(() {
-        _markers.removeWhere((m) => m.markerId.value == listing.listingId);
-        _markers.add(marker);
-      });
-    }
+    }).toSet();
   }
 
   Future<void> _applyCategoryFilter() async {
-    final filtered =
-        _selectedCategory == 'All Categories'
-            ? _allListings
-            : _allListings
-                .where((l) => l.category == _selectedCategory)
-                .toList();
+    final int requestId = ++_filterRequestId;
 
-    final markers = await _buildMarkers(filtered);
+    final selectedCategory = _selectedCategory.trim().toLowerCase();
 
-    if (mounted) {
-      setState(() => _markers = markers);
+    final filteredListings =
+        selectedCategory == 'all categories'
+            ? List<Listing>.from(_allListings)
+            : _allListings.where((listing) {
+              return listing.category.trim().toLowerCase() == selectedCategory;
+            }).toList();
+
+    debugPrint(
+      'Map filter: $_selectedCategory → '
+      '${filteredListings.length} listings',
+    );
+
+    // --------------------------------------------------
+    // STEP 1: Show normal markers immediately.
+    // No network / image processing here.
+    // --------------------------------------------------
+
+    final defaultMarkers = _buildDefaultMarkers(filteredListings);
+
+    if (!mounted || requestId != _filterRequestId) {
+      return;
+    }
+
+    setState(() {
+      _markers = defaultMarkers;
+      _selectedListing = null;
+    });
+
+    // --------------------------------------------------
+    // STEP 2: Load category icons in background.
+    // --------------------------------------------------
+
+    _loadCategoryMarkers(filteredListings, requestId);
+  }
+
+  Future<void> _loadCategoryMarkers(
+    List<Listing> listings,
+    int requestId,
+  ) async {
+    // Group listings by category icon URL.
+    //
+    // 30 Bike Showrooms = 1 icon request
+    // 20 Hospitals = 1 icon request
+    //
+    // Not one request per listing.
+
+    final Map<String, List<Listing>> grouped = {};
+
+    for (final listing in listings) {
+      final categoryName = listing.category.trim().toLowerCase();
+
+      final imageUrl = _catIconsURL[categoryName];
+
+      if (imageUrl == null || imageUrl.isEmpty) {
+        continue;
+      }
+
+      grouped.putIfAbsent(imageUrl, () => []).add(listing);
+    }
+
+    // Process category icons in small batches.
+    //
+    // This prevents 100+ image downloads/decodes
+    // from hitting the UI/network at once.
+    final entries = grouped.entries.toList();
+
+    const batchSize = 5;
+
+    for (int i = 0; i < entries.length; i += batchSize) {
+      if (!mounted || requestId != _filterRequestId) {
+        return;
+      }
+
+      final batch = entries.skip(i).take(batchSize);
+
+      await Future.wait(
+        batch.map((entry) async {
+          final imageUrl = entry.key;
+
+          final marker = await _getMarkerForImage(imageUrl);
+
+          if (!mounted || requestId != _filterRequestId) {
+            return;
+          }
+
+          final listingIds =
+              entry.value.map((listing) => listing.listingId).toSet();
+
+          setState(() {
+            _markers =
+                _markers.map((existingMarker) {
+                  if (listingIds.contains(existingMarker.markerId.value)) {
+                    return Marker(
+                      markerId: existingMarker.markerId,
+                      position: existingMarker.position,
+                      icon: marker,
+                      onTap: existingMarker.onTap,
+                      infoWindow: existingMarker.infoWindow,
+                      rotation: existingMarker.rotation,
+                      anchor: existingMarker.anchor,
+                      flat: existingMarker.flat,
+                      draggable: existingMarker.draggable,
+                      visible: existingMarker.visible,
+                      zIndex: existingMarker.zIndex,
+                    );
+                  }
+
+                  return existingMarker;
+                }).toSet();
+          });
+        }),
+      );
+
+      // Give Flutter a chance to render between batches.
+      await Future<void>.delayed(const Duration(milliseconds: 30));
     }
   }
 
@@ -154,95 +249,144 @@ class _ListingMapScreenState extends State<ListingMapScreen> {
         CameraPosition(
           target: LatLng(listing.geo.lat, listing.geo.lng),
 
-          zoom: 13,
+          zoom: 9.5,
         ),
       ),
     );
   }
 
-  /* --------------------------------------------------------
-     CUSTOM MARKER (RED PIN + CIRCULAR IMAGE)
-  -------------------------------------------------------- */
+  Future<BitmapDescriptor> _getMarkerForImage(String imageUrl) async {
+    // Already generated
+    final cachedMarker = _markerCache[imageUrl];
 
-  Future<BitmapDescriptor> _getCustomMarker(String imageUrl) async {
-    if (_markerCache.containsKey(imageUrl)) {
-      return _markerCache[imageUrl]!;
+    if (cachedMarker != null) {
+      return cachedMarker;
     }
 
-    final Uint8List imageBytes =
-        (await http.get(Uri.parse(imageUrl))).bodyBytes;
+    // Already being generated/downloaded
+    final existingFuture = _markerFutureCache[imageUrl];
 
+    if (existingFuture != null) {
+      return existingFuture;
+    }
+
+    final future = _createMarkerFromUrl(imageUrl);
+
+    _markerFutureCache[imageUrl] = future;
+
+    try {
+      final marker = await future;
+
+      _markerCache[imageUrl] = marker;
+
+      return marker;
+    } finally {
+      _markerFutureCache.remove(imageUrl);
+    }
+  }
+
+  Future<BitmapDescriptor> _createMarkerFromUrl(String imageUrl) async {
+    try {
+      final response = await http.get(Uri.parse(imageUrl));
+
+      if (response.statusCode != 200) {
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+      }
+
+      return await _createCategoryMarker(response.bodyBytes);
+    } catch (e) {
+      debugPrint('Marker image error: $e');
+
+      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+    }
+  }
+
+  Future<BitmapDescriptor> _createCategoryMarker(Uint8List imageBytes) async {
     final codec = await ui.instantiateImageCodec(
       imageBytes,
-      targetWidth: 72,
-      targetHeight: 72,
+      targetWidth: 80,
+      targetHeight: 80,
     );
-    final frame = await codec.getNextFrame();
-    final ui.Image image = frame.image;
 
-    const int size = 200;
-    const double imageRadius = 60;
-    const double borderWidth = 7;
+    final frame = await codec.getNextFrame();
+    final iconImage = frame.image;
+
+    const double size = 120;
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final paint = Paint()..isAntiAlias = true;
 
-    /// Transparent background
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()),
-      Paint()..color = Colors.transparent,
-    );
+    // custom pin -> APPTHEME -> GREEN
+    _drawPin(canvas, paint, size);
 
-    /// Red pin body
-    paint.color = AppColors.THEME_COLOR;
-    final path =
+    // icon ke lie circle -> WHITE
+    _drawCategoryCircle(canvas, paint, size);
+
+    // Category icon inside WHITE circle
+    _drawCategoryIcon(canvas, iconImage, size);
+
+    // --------------------------------------------------
+    // Convert to BitmapDescriptor
+    // --------------------------------------------------
+    final picture = recorder.endRecording();
+
+    final image = await picture.toImage(size.toInt(), size.toInt());
+
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+
+    if (byteData == null) {
+      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+    }
+
+    return BitmapDescriptor.bytes(byteData.buffer.asUint8List(), width: 55);
+  }
+
+  void _drawPin(Canvas canvas, Paint paint, double size) {
+    paint.color = AppColors.RED;
+
+    final centerX = size / 2;
+
+    final pinPath =
         Path()
-          ..moveTo(size / 2, size.toDouble())
-          ..quadraticBezierTo(10, size / 2, size / 2, size / 2)
-          ..quadraticBezierTo(size - 10, size / 2, size / 2, size.toDouble());
-    canvas.drawPath(path, paint);
+          ..moveTo(centerX, 108)
+          ..quadraticBezierTo(25, 70, centerX, 48)
+          ..quadraticBezierTo(size - 25, 70, centerX, 108);
 
-    /// White circular border
-    paint.color = Colors.white;
-    canvas.drawCircle(
-      Offset(size / 2, size / 2 - 12),
-      imageRadius + borderWidth,
-      paint,
+    canvas.drawPath(pinPath, paint);
+  }
+
+  void _drawCategoryCircle(Canvas canvas, Paint paint, double size) {
+    paint.color = AppColors.WHITE;
+
+    canvas.drawCircle(Offset(size / 2, 40), 40, paint);
+
+    paint.color = AppColors.RED;
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 4.0;
+    canvas.drawCircle(Offset(size / 2, 42), 40, paint);
+  }
+
+  void _drawCategoryIcon(Canvas canvas, ui.Image iconImage, double size) {
+    const double iconSize = 50;
+
+    final destination = Rect.fromCenter(
+      center: Offset(size / 2, 42),
+      width: iconSize,
+      height: iconSize,
     );
-
-    /// Clip circular image
-    final clipPath =
-        Path()..addOval(
-          Rect.fromCircle(
-            center: Offset(size / 2, size / 2 - 12),
-            radius: imageRadius,
-          ),
-        );
-
-    canvas.save();
-    canvas.clipPath(clipPath);
 
     canvas.drawImageRect(
-      image,
-      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-      Rect.fromCircle(
-        center: Offset(size / 2, size / 2 - 12),
-        radius: imageRadius,
+      iconImage,
+      Rect.fromLTWH(
+        0,
+        0,
+        iconImage.width.toDouble(),
+        iconImage.height.toDouble(),
       ),
-      Paint(),
+      destination,
+      Paint()..isAntiAlias = true,
     );
-
-    canvas.restore();
-
-    final picture = recorder.endRecording();
-    final img = await picture.toImage(size, size);
-    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-
-    final descriptor = BitmapDescriptor.bytes(byteData!.buffer.asUint8List());
-
-    _markerCache[imageUrl] = descriptor;
-    return descriptor;
   }
 
   /* --------------------------------------------------------
@@ -255,9 +399,10 @@ class _ListingMapScreenState extends State<ListingMapScreen> {
       body: Stack(
         children: [
           GoogleMap(
+            // mapType: MapType.hybrid,
             initialCameraPosition: const CameraPosition(
               target: LatLng(22.5744, 88.3629),
-              zoom: 9,
+              zoom: 9.5,
             ),
             markers: _markers,
             onMapCreated: (controller) {
@@ -274,10 +419,6 @@ class _ListingMapScreenState extends State<ListingMapScreen> {
               child: ListingPreviewCard(listing: _selectedListing!),
             ),
 
-          // Positioned(
-          //   top: 12,
-          //   left: 16,
-          //   right: 16,
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
@@ -287,14 +428,25 @@ class _ListingMapScreenState extends State<ListingMapScreen> {
                         height: 48,
                         child: Center(child: CircularProgressIndicator()),
                       )
-                      : _CategorySelector(
+                      : SearchableDropdown(
                         categories: _categories,
-                        selected: _selectedCategory,
-                        onChanged: (value) async {
-                          if (value == _selectedCategory) return;
-                          setState(() => _selectedCategory = value);
+                        onCategorySelected: (id, name) async {
+                          final newCategory =
+                              name.isEmpty ? 'All Categories' : name;
+
+                          if (newCategory == _selectedCategory) return;
+
+                          setState(() {
+                            _selectedCategory = newCategory;
+                          });
                           await _applyCategoryFilter();
                         },
+                        selectedCategoryId: null,
+                        selectedCategoryName:
+                            _selectedCategory == 'All Categories'
+                                ? null
+                                : _selectedCategory,
+                        style: SearchableDropdownStyle.compact,
                       ),
             ),
           ),
@@ -307,114 +459,6 @@ class _ListingMapScreenState extends State<ListingMapScreen> {
 /* --------------------------------------------------------
    PREVIEW CARD
 -------------------------------------------------------- */
-
-class _CategorySelector extends StatelessWidget {
-  final List<Category> categories;
-  final String selected;
-  final ValueChanged<String> onChanged;
-
-  const _CategorySelector({
-    required this.categories,
-    required this.selected,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.96),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.teal.withOpacity(0.3), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.18),
-            blurRadius: 22,
-            spreadRadius: 1,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      // elevation: 6,
-      // borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: selected,
-            isExpanded: true,
-            // icon: const Icon(Icons.filter_list),
-            icon: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.tune_rounded,
-                size: 20,
-                color: Colors.black,
-              ),
-            ),
-            items: [
-              const DropdownMenuItem(
-                value: 'All Categories',
-                child: Text(
-                  'All Categories',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-              ),
-              ...categories.map(
-                (c) => DropdownMenuItem(
-                  value: c.name,
-                  child: Row(
-                    children: [
-                      if (c.imageUrl.isNotEmpty)
-                        SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CachedNetworkImage(
-                            imageUrl: c.imageUrl,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                            // show your shimmer while loading
-                            // placeholder: Shimmer.fromColors(
-                            //   baseColor: AppColors.GREY_SHADE_300,
-                            //   highlightColor: AppColors.GREY_SHADE_100,
-                            //   child: Container(color: AppColors.GREY_SHADE_300),
-                            // ),
-                            // errorWidget: const Icon(Icons.broken_image),
-                          ),
-                        ),
-
-                      if (c.imageUrl.isNotEmpty) const SizedBox(width: 15),
-                      Text(
-                        c.name,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class ListingPreviewCard extends StatelessWidget {
   final Listing listing;
@@ -578,159 +622,6 @@ class ListingPreviewCard extends StatelessWidget {
             ),
           ],
         ),
-
-        // child: Padding(
-        //   padding: const EdgeInsets.only(left: 6),
-        //   child: Column(
-        //     crossAxisAlignment: CrossAxisAlignment.start,
-        //     children: [
-        //       Row(
-        //         crossAxisAlignment: CrossAxisAlignment.start,
-        //         children: [
-        //           ClipRRect(
-        //             borderRadius: BorderRadius.only(
-        //               topLeft: Radius.circular(18),
-        //               bottomLeft: Radius.circular(18),
-        //             ),
-        //             child:
-        //                 listing.images.isNotEmpty
-        //                     ? Image.network(
-        //                       listing.images.first.thumbUrl,
-        //                       width: 120,
-        //                       height: 120,
-        //                       fit: BoxFit.cover,
-        //                     )
-        //                     : Icon(Icons.broken_image),
-        //           ),
-        //           Expanded(
-        //             child: Container(
-        //               color: Colors.white,
-        //               child: Padding(
-        //                 padding: const EdgeInsets.only(
-        //                   top: 10.0,
-        //                   left: 10,
-        //                   bottom: 36,
-        //                 ),
-        //                 child: Column(
-        //                   crossAxisAlignment: CrossAxisAlignment.start,
-        //                   children: [
-        //                     Text(
-        //                       listing.name,
-        //                       style: const TextStyle(
-        //                         fontSize: 17,
-        //                         fontWeight: FontWeight.w700,
-        //                         color: Color(0xFF111827),
-        //                         letterSpacing: -0.2,
-        //                       ),
-        //                       maxLines: 1,
-        //                       overflow: TextOverflow.ellipsis,
-        //                     ),
-        //                     SizedBox(height: 6),
-        //                     Container(
-        //                       padding: const EdgeInsets.symmetric(
-        //                         horizontal: 10,
-        //                         vertical: 5,
-        //                       ),
-        //                       decoration: BoxDecoration(
-        //                         color: const Color(
-        //                           0xFF00897B,
-        //                         ).withOpacity(0.10),
-        //                         borderRadius: BorderRadius.only(
-        //                           topRight: Radius.circular(18),
-        //                           bottomRight: Radius.circular(18),
-        //                         ),
-        //                       ),
-        //                       child: Text(
-        //                         listing.category,
-        //                         style: const TextStyle(
-        //                           fontSize: 10,
-        //                           fontWeight: FontWeight.w600,
-        //                           color: Color(0xFF00897B),
-        //                           letterSpacing: 0.2,
-        //                         ),
-        //                       ),
-        //                     ),
-        //                     const SizedBox(height: 4),
-        //                     Row(
-        //                       children: [
-        //                         // Filled / half / empty stars
-        //                         Row(
-        //                           mainAxisSize: MainAxisSize.min,
-        //                           children: List.generate(5, (i) {
-        //                             final icon =
-        //                                 i < listing.rating.floor()
-        //                                     ? Icons.star_rounded
-        //                                     : (i < listing.rating &&
-        //                                         listing.rating - i >= 0.5)
-        //                                     ? Icons.star_half_rounded
-        //                                     : Icons.star_outline_rounded;
-        //                             return Icon(
-        //                               icon,
-        //                               size: 12,
-        //                               color: const Color(0xFFF59E0B),
-        //                             );
-        //                           }),
-        //                         ),
-        //                         const SizedBox(width: 6),
-        //                         Text(
-        //                           listing.rating.toStringAsFixed(1),
-        //                           style: const TextStyle(
-        //                             fontSize: 12,
-        //                             fontWeight: FontWeight.w600,
-        //                             color: Color(0xFF111827),
-        //                           ),
-        //                         ),
-        //                         const SizedBox(width: 4),
-        //                         Text(
-        //                           "(${listing.reviews})",
-        //                           style: TextStyle(
-        //                             fontSize: 12,
-        //                             color: Colors.grey.shade400,
-        //                           ),
-        //                         ),
-        //                       ],
-        //                     ),
-        //                   ],
-        //                 ),
-        //               ),
-        //             ),
-        //           ),
-        //         ],
-        //       ),
-        //       // Expanded(
-        //       //   child: Row(
-        //       //     children: [Container(height: 20, color: Colors.white)],
-        //       //   ),
-        //       // ),
-        //       // const SizedBox(width: 12),
-        //       // Expanded(
-        //       //   child: Column(
-        //       //     crossAxisAlignment: CrossAxisAlignment.start,
-        //       //     children: [
-        //       //       Text(
-        //       //         listing.name,
-        //       //         style: const TextStyle(
-        //       //           fontSize: 16,
-        //       //           fontWeight: FontWeight.bold,
-        //       //         ),
-        //       //       ),
-        //       //       Text(listing.category),
-        //       //       const SizedBox(height: 4),
-        //       //       Row(
-        //       //         children: [
-        //       //           const Icon(Icons.star, size: 14, color: Colors.amber),
-        //       //           const SizedBox(width: 4),
-        //       //           Text(listing.rating.toStringAsFixed(1)),
-        //       //           const SizedBox(width: 8),
-        //       //           Text("(${listing.reviews})"),
-        //       //         ],
-        //       //       ),
-        //       //     ],
-        //       //   ),
-        //       // ),
-        //     ],
-        //   ),
-        // ),
       ),
     );
   }
