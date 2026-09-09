@@ -66,6 +66,7 @@ dependencies:
   razorpay_flutter: ^1.4.1
   cloud_functions: ^6.1.0
   animated_text_kit: ^4.3.0
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
