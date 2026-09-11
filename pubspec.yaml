@@ -56,7 +56,6 @@ dependencies:
   firebase_messaging: ^16.6.0
   intl: ^0.20.2
   shared_preferences: ^2.5.3
-  dropdown_search: ^6.0.2
   google_maps_flutter: ^2.13.1
   in_app_update: ^5.0.0
   share_plus: ^13.3.0
