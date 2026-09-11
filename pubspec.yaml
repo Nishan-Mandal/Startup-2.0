@@ -63,7 +63,7 @@ dependencies:
   flutter_html: ^3.0.0
   package_info_plus: ^8.3.1
   http: ^1.6.0
-  razorpay_flutter: ^1.4.1
+  razorpay_flutter: ^1.4.6
   cloud_functions: ^6.4.0
   animated_text_kit: ^4.3.0
   flutter_svg: ^2.2.2
@@ -78,7 +78,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
