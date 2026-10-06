@@ -1388,19 +1388,61 @@ class _AddListingScreenState extends State<AddListingScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 10),
+
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 6,
+              runSpacing: 6,
               children:
                   _selectedTags.map((tag) {
-                    return Chip(
-                      label: Text(tag),
-                      deleteIcon: const Icon(Icons.close),
-                      onDeleted: () {
+                    return GestureDetector(
+                      onTap: () {
                         setState(() {
                           _selectedTags.remove(tag);
                         });
                       },
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 275),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.THEME_COLOR.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                tag,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.BLACK,
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 4),
+
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _aiSuggestedTags.remove(tag);
+                                });
+                              },
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 17,
+                                color: AppColors.BLACK_54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                   }).toList(),
             ),
@@ -1457,36 +1499,69 @@ class _AddListingScreenState extends State<AddListingScreen> {
           ),
           const SizedBox(height: 10),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 6,
+            runSpacing: 6,
             children:
                 _aiSuggestedTags
                     .where((tag) => !_selectedTags.contains(tag))
                     .map((tag) {
                       final isSelected = _selectedTags.contains(tag);
-
-                      return FilterChip(
-                        label: Text(tag),
-                        selected: isSelected,
-                        onSelected: (_) {
+                      return GestureDetector(
+                        onTap: () {
                           setState(() {
                             isSelected
                                 ? _selectedTags.remove(tag)
                                 : _selectedTags.add(tag);
                           });
                         },
-                        deleteIcon: const Icon(Icons.close),
-                        onDeleted: () {
-                          setState(() {
-                            _aiSuggestedTags.remove(tag);
-                          });
-                        },
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 275),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.THEME_COLOR.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  tag,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.BLACK,
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(width: 4),
+
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _aiSuggestedTags.remove(tag);
+                                  });
+                                },
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 17,
+                                  color: AppColors.BLACK_54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       );
                     })
                     .toList(),
           ),
         ],
-        // ],
       ),
     );
   }
