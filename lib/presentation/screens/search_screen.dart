@@ -26,6 +26,9 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
   bool isLoading = false;
+  bool isListingLoading = false;
+  bool isSearching = false;
+  int _searchRequestId = 0;
   final FocusNode _searchFocusNode = FocusNode();
 
   String query = "";
@@ -35,12 +38,18 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Category> categoryResults = [];
   List<Listing> listingResults = [];
   List<String> tagResults = [];
+  List<Category> topCategories = [];
+  List<Map<String, dynamic>> trendingSearches = [];
+  bool isTopCategoriesLoading = true;
+  bool isTrendingSearchesLoading = true;
   bool showSuggestions = true;
 
   @override
   void initState() {
     super.initState();
     _loadRecentSearches();
+    _loadTopCategories();
+    _loadTrendingSearches();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FocusScope.of(context).requestFocus(_searchFocusNode);
     });
@@ -50,7 +59,60 @@ class _SearchScreenState extends State<SearchScreen> {
   Future<void> _loadRecentSearches() async {
     final prefs = await SharedPreferences.getInstance();
     final savedSearches = prefs.getStringList('recentSearches') ?? [];
-    setState(() => recentSearches = savedSearches);
+    final limitedSearches = savedSearches.take(5).toList();
+
+    await prefs.setStringList('recentSearches', limitedSearches);
+
+    if (!mounted) return;
+
+    setState(() {
+      recentSearches = limitedSearches;
+    });
+  }
+
+  Future<void> _loadTopCategories() async {
+    try {
+      final results = await AlgoliaService.getTopCategories();
+
+      if (!mounted) return;
+
+      setState(() {
+        topCategories =
+            results.map((e) => Category.fromJson(e)).take(8).toList();
+
+        isTopCategoriesLoading = false;
+      });
+    } catch (e) {
+      debugPrint("Error loading top categories: $e");
+
+      if (!mounted) return;
+
+      setState(() {
+        isTopCategoriesLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadTrendingSearches() async {
+    try {
+      final results = await AlgoliaService.getTrendingSearches();
+
+      if (!mounted) return;
+
+      setState(() {
+        trendingSearches = results.take(6).toList();
+
+        isTrendingSearchesLoading = false;
+      });
+    } catch (e) {
+      debugPrint("Error loading trending searches: $e");
+
+      if (!mounted) return;
+
+      setState(() {
+        isTrendingSearchesLoading = false;
+      });
+    }
   }
 
   /// 🔹 Save recent searches to SharedPreferences
@@ -58,14 +120,15 @@ class _SearchScreenState extends State<SearchScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('recentSearches', recentSearches);
   }
+
   Future<void> _addRecentSearch(String term) async {
     final value = term.trim();
     if (value.isEmpty) return;
     setState(() {
       recentSearches.remove(value); // duplicate htane ke lie add kie hain
       recentSearches.insert(0, value); // hrr baar most recent search upar rhega
-      if (recentSearches.length > 10) {
-        recentSearches = recentSearches.take(10).toList();
+      if (recentSearches.length > 5) {
+        recentSearches = recentSearches.take(5).toList();
       }
 
       sessionSearches.remove(value);
@@ -83,13 +146,15 @@ class _SearchScreenState extends State<SearchScreen> {
   /// Debounced Search
   void _onSearchChanged(String text) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 1000), () {
+    _debounce = Timer(const Duration(milliseconds: 150), () {
       _search(text.trim());
     });
   }
 
   /// Firestore Search
   Future<void> _search(String text, {bool showTagSuggestions = true}) async {
+    final requestId = ++_searchRequestId;
+
     if (text.isEmpty) {
       setState(() {
         query = "";
@@ -98,28 +163,29 @@ class _SearchScreenState extends State<SearchScreen> {
         tagResults = [];
         showSuggestions = showTagSuggestions;
         isLoading = false;
+        isSearching = false;
+        isListingLoading = false;
       });
       return;
     }
 
     setState(() {
-      isLoading = true;
+      isSearching = true;
       query = text;
       showSuggestions = showTagSuggestions;
+      if (listingResults.isEmpty) {
+        isListingLoading = true;
+      }
     });
 
     final appUser = context.read<AppAuthProvider>().appUser;
     final isAdmin = appUser?.role == 'admin';
 
     try {
-      // 🔹 Parallel search
-      final results = await Future.wait([
-        AlgoliaService.searchListings(text),
-        AlgoliaService.searchCategories(text),
-      ]);
+      final results = await AlgoliaService.search(text);
 
-      final listingHits = results[0];
-      final categoryHits = results[1];
+      final listingHits = results['Listings'] ?? [];
+      final categoryHits = results['categories'] ?? [];
 
       final Set<String> matchedTags = {};
 
@@ -133,6 +199,19 @@ class _SearchScreenState extends State<SearchScreen> {
         }
       }
 
+      final categories = categoryHits.map((e) => Category.fromJson(e)).toList();
+
+      if (!mounted || requestId != _searchRequestId) {
+        return;
+      }
+
+      setState(() {
+        categoryResults = categories.take(6).toList();
+        tagResults = matchedTags.take(6).toList();
+        isSearching = false;
+        isLoading = false;
+        isListingLoading = true;
+      });
       // 🔹 Extract listing IDs
       final ids =
           listingHits
@@ -181,25 +260,33 @@ class _SearchScreenState extends State<SearchScreen> {
                 (listing.verifiedBy != null && listing.verifiedBy!.isNotEmpty);
           }).toList();
 
-      // 🔹 Map categories (NO Firestore call needed)cine
-      final categories = categoryHits.map((e) => Category.fromJson(e)).toList();
+      if (!mounted || requestId != _searchRequestId) {
+        return;
+      }
       // 🔹 Update UI
       setState(() {
         listingResults = filteredListings;
-        categoryResults = categories.take(6).toList();
-        tagResults = matchedTags.take(6).toList();
+        isListingLoading = false;
         isLoading = false;
       });
     } catch (e, stackTrace) {
       debugPrint("Algolia error: $e");
       debugPrint("📍 StackTrace:\n$stackTrace");
-      setState(() => isLoading = false);
+
+      if (!mounted || requestId != _searchRequestId) {
+        return;
+      }
+
+      setState(() {
+        isLoading = false;
+        isListingLoading = false;
+      });
     }
   }
 
   Future<void> _saveSearchSessionToFirestore() async {
     try {
-      if (AppAuthProvider.isAnonymousUser() || recentSearches.isEmpty) return;
+      if (AppAuthProvider.isAnonymousUser() || sessionSearches.isEmpty) return;
 
       final user = FirebaseAuth.instance.currentUser;
 
@@ -286,74 +373,78 @@ class _SearchScreenState extends State<SearchScreen> {
                         color: AppColors.BLACK_54,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
+
                     Wrap(
-                      spacing: 8,
+                      spacing: 6,
+                      runSpacing: 6,
                       children:
                           recentSearches.map((item) {
-                            return Theme(
-                              data: Theme.of(context).copyWith(
-                                splashColor: Colors.transparent,
-                                highlightColor: Colors.transparent,
-                                splashFactory: NoSplash.splashFactory,
-                              ),
-                              child: ListTile(
-                                contentPadding: EdgeInsets.only(
-                                  left: 2,
-                                  right: 4,
+                            return GestureDetector(
+                              onTap: () {
+                                _controller.text = item;
+                                _search(item, showTagSuggestions: false);
+                              },
+                              child: Container(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 275,
                                 ),
-                                leading: CircleAvatar(
-                                  backgroundColor: AppColors.GREY_SHADE_300,
-                                  child: Icon(
-                                    Icons.rotate_90_degrees_cw_outlined,
-                                    color: AppColors.THEME_COLOR,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 11,
+                                  vertical: 9,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.THEME_COLOR.withOpacity(
+                                    0.05,
                                   ),
+                                  borderRadius: BorderRadius.circular(18),
                                 ),
-                                trailing: IconButton(
-                                  onPressed: () async {
-                                    _removeRecentSearch(item);
-                                  },
-                                  icon: Icon(Icons.close),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.history_rounded,
+                                      size: 17,
+                                      color: AppColors.THEME_COLOR,
+                                    ),
+                                    const SizedBox(width: 5),
+
+                                    Flexible(
+                                      child: Text(
+                                        item,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.BLACK,
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(width: 4),
+
+                                    GestureDetector(
+                                      onTap: () {
+                                        _removeRecentSearch(item);
+                                      },
+                                      child: Icon(
+                                        Icons.close_rounded,
+                                        size: 17,
+                                        color: AppColors.BLACK_54,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                title: Text(item),
-                                onTap: () async {
-                                  _controller.text = item;
-                                  _search(item, showTagSuggestions: false);
-                                },
                               ),
                             );
-                            // InputChip(
-                            //   avatar: Icon(
-                            //     Icons.rotate_90_degrees_cw_outlined,
-                            //     color: AppColors.THEME_COLOR,
-                            //   ),
-                            //   label: Text(item),
-                            //   backgroundColor: AppColors.GREY_SHADE_100,
-                            //   onPressed: () {
-                            //     _controller.text = item;
-                            //     _search(item);
-                            //   },
-                            //   deleteIcon: const Icon(Icons.close, size: 18),
-                            //   onDeleted: () async {
-                            //     // Remove from list
-                            //     _removeRecentSearch(item);
-                            //   },
-                            // );
                           }).toList(),
                     ),
                   ],
                 ),
-
               // 🔹 Results Section
               Expanded(
-                child:
-                    query.isEmpty
-                        ? const Center(
-                          child: Text("Type something to start searching..."),
-                        )
-                        : isLoading
-                        ? _loadingSkeleton()
-                        : _searchResults(),
+                child: query.isEmpty ? _emptySearchContent() : _searchResults(),
               ),
             ],
           ),
@@ -362,46 +453,267 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _loadingSkeleton() {
+  Widget _emptySearchContent() {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Categories",
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.BLACK_54,
+          if (trendingSearches.isNotEmpty) ...[
+            const SizedBox(height: 20),
+
+            Row(
+              children: [
+                const Text(
+                  "Trending Searches",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.BLACK_54,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.GREY_SHADE_100,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  padding: const EdgeInsets.all(2),
+                  child: const Icon(
+                    Icons.trending_up_rounded,
+                    color: AppColors.THEME_COLOR,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 8),
-          ...List.generate(2, (index) => categoryTileLoader()),
-          const SizedBox(height: 20),
-          const Text(
-            "Listings",
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.BLACK_54,
+
+            const SizedBox(height: 10),
+
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children:
+                  trendingSearches.map((item) {
+                    final searchTerm = item['query']?.toString() ?? "";
+                    final popularity = item['popularity'] ?? 0;
+                    return GestureDetector(
+                      onTap: () async {
+                        _controller.text = searchTerm;
+
+                        await _addRecentSearch(searchTerm);
+
+                        _search(searchTerm, showTagSuggestions: false);
+                      },
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 275),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 9,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.THEME_COLOR.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.trending_up_rounded,
+                              size: 17,
+                              color: AppColors.THEME_COLOR,
+                            ),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                searchTerm,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.BLACK,
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 7),
+
+                            Text(
+                              popularity.toString() + "k",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.THEME_COLOR,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
             ),
-          ),
-          const SizedBox(height: 10),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 4,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+          ],
+          if (topCategories.isNotEmpty) ...[
+            const SizedBox(height: 20),
+
+            Row(
+              children: [
+                const Text(
+                  "Trending Categories",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.BLACK_54,
+                  ),
+                ),
+                SizedBox(width: 5),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.GREY_SHADE_100,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2.0),
+                    child: Icon(
+                      Icons.trending_up_rounded,
+                      color: AppColors.THEME_COLOR,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            itemBuilder: (context, index) => CommonWidgets.shimmerlistingCard(),
-          ),
+            const SizedBox(height: 10),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: topCategories.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                mainAxisExtent: 118,
+              ),
+              itemBuilder: (context, index) {
+                final category = topCategories[index];
+
+                return GestureDetector(
+                  onTap: () {
+                    _controller.text = category.name;
+                    _search(category.name, showTagSuggestions: false);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.THEME_COLOR.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(12),
+                      // border: Border.all(
+                      //   color: AppColors.THEME_COLOR.withOpacity(0.2),
+                      // ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: CachedNetworkImage(
+                            imageUrl: category.imageUrl,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+
+                        const SizedBox(height: 6),
+
+                        Text(
+                          category.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.BLACK,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _highlightMatch(String text, String searchQuery, {TextStyle? style}) {
+    final query = searchQuery.trim();
+
+    final baseStyle = (style ?? const TextStyle()).copyWith(
+      decoration: TextDecoration.none,
+    );
+
+    if (query.isEmpty) {
+      return Text(text, style: baseStyle);
+    }
+
+    final regex = RegExp(RegExp.escape(query), caseSensitive: false);
+
+    final matches = regex.allMatches(text).toList();
+
+    if (matches.isEmpty) {
+      return Text(text, style: baseStyle);
+    }
+
+    final spans = <InlineSpan>[];
+    int lastEnd = 0;
+
+    for (final match in matches) {
+      // Normal text before match
+      if (match.start > lastEnd) {
+        spans.add(
+          TextSpan(
+            text: text.substring(lastEnd, match.start),
+            style: baseStyle,
+          ),
+        );
+      }
+
+      // Highlighted match
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.baseline,
+          baseline: TextBaseline.alphabetic,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+            decoration: BoxDecoration(
+              color: AppColors.THEME_COLOR.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              text.substring(match.start, match.end),
+              style: baseStyle.copyWith(
+                color: AppColors.THEME_COLOR,
+                fontWeight: FontWeight.w700,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      lastEnd = match.end;
+    }
+
+    // Normal text after match
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd), style: baseStyle));
+    }
+
+    return RichText(text: TextSpan(style: baseStyle, children: spans));
   }
 
   Widget _searchResults() {
@@ -409,7 +721,27 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (listingResults.isEmpty && categoryResults.isEmpty)
+          if (isSearching &&
+              listingResults.isEmpty &&
+              categoryResults.isEmpty &&
+              tagResults.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.only(top: 24),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.THEME_COLOR,
+                  ),
+                ),
+              ),
+            )
+          else if (!isSearching &&
+              listingResults.isEmpty &&
+              categoryResults.isEmpty &&
+              tagResults.isEmpty)
             const Center(
               child: Column(
                 children: [
@@ -445,13 +777,22 @@ class _SearchScreenState extends State<SearchScreen> {
                   child: ListTile(
                     contentPadding: EdgeInsets.only(left: 2),
                     leading: CircleAvatar(
-                      backgroundColor: AppColors.GREY_SHADE_300,
+                      backgroundColor: AppColors.GREY_SHADE_100,
                       child: Icon(
-                        Icons.search_rounded,
-                        color: AppColors.THEME_COLOR,
+                        Icons.timer_sharp,
+                        color: AppColors.THEME_COLOR.withOpacity(0.7),
                       ),
                     ),
-                    title: Text(tag),
+
+                    title: _highlightMatch(
+                      tag,
+                      query,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: AppColors.BLACK,
+                      ),
+                    ),
+                    // title: Text(tag),
                     onTap: () async {
                       _controller.text = tag;
                       await _addRecentSearch(tag);
@@ -496,12 +837,42 @@ class _SearchScreenState extends State<SearchScreen> {
                     height: 30,
                     child: CachedNetworkImage(imageUrl: category.imageUrl),
                   ),
-                  title: Text(category.name),
+                  title: _highlightMatch(
+                    category.name,
+                    query,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: AppColors.BLACK,
+                    ),
+                  ),
                 );
               }),
               const SizedBox(height: 20),
             ],
-            if (listingResults.isNotEmpty) ...[
+            if (isListingLoading) ...[
+              const Text(
+                "Listings",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.BLACK_54,
+                ),
+              ),
+              const SizedBox(height: 10),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: 4,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.75,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemBuilder:
+                    (context, index) => CommonWidgets.shimmerlistingCard(),
+              ),
+            ] else if (listingResults.isNotEmpty) ...[
               const Text(
                 "Listings",
                 style: TextStyle(
@@ -523,6 +894,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
                 itemBuilder: (context, index) {
                   final listing = listingResults[index];
+
                   return GestureDetector(
                     onTap:
                         () => CommonMethods.navigateToListingDetailScreen(

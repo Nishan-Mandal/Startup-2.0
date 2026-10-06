@@ -281,7 +281,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-
               SliverToBoxAdapter(child: const SizedBox(height: 20)),
               SliverToBoxAdapter(child: _headings('Newly Added')),
 
@@ -310,15 +309,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _bannerData(String imageLink) {
     return Container(
-      // padding: const EdgeInsets.symmetric(vertical: ),
       width: double.infinity,
-      height: 250,
+      height: 220,
       color: AppColors.GREY_SHADE_300,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(0),
         child: CachedNetworkImage(
           imageUrl: imageLink,
-          fit: BoxFit.cover,
+          fit: BoxFit.fill,
 
           placeholder: (context, url) {
             return Shimmer.fromColors(
@@ -368,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: CachedNetworkImage(
                 imageUrl: imageUrl,
                 width: double.infinity,
-                fit: BoxFit.cover,
+                fit: BoxFit.fill,
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
                 placeholder: (context, url) {
