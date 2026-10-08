@@ -817,6 +817,9 @@ class _SearchScreenState extends State<SearchScreen> {
               ...categoryResults.map((category) {
                 return ListTile(
                   onTap: () {
+                    unawaited(
+                      AlgoliaService.trackCategoryFilter(category.name),
+                    );
                     Navigator.push(
                       context,
                       MaterialPageRoute(
