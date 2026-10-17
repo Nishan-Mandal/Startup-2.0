@@ -100,7 +100,7 @@ class _SearchScreenState extends State<SearchScreen> {
       if (!mounted) return;
 
       setState(() {
-        trendingSearches = results.take(6).toList();
+        trendingSearches = results.take(8).toList();
 
         isTrendingSearchesLoading = false;
       });
