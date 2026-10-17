@@ -10,9 +10,18 @@ import 'package:startup_20/main.dart';
 class NotificationService {
   static final firebaseMessaging = FirebaseMessaging.instance;
   static final _localNotifications = FlutterLocalNotificationsPlugin();
+  static bool _initialized = false;
+  static bool _isAiNotification(RemoteMessage message) {
+    return message.data['type'] == 'ai_general';
+  }
 
   /// Initialize Firebase Messaging + Local Notifications
   static Future<void> initialize() async {
+    if (_initialized) {
+      debugPrint('NotificationService already initialized; skipping.');
+      return;
+    }
+    _initialized = true;
     // 🔹 Request permission (for iOS and macOS)
     await firebaseMessaging.requestPermission(
       alert: true,
@@ -46,31 +55,54 @@ class NotificationService {
 
     // 🔹 Foreground message handling
     FirebaseMessaging.onMessage.listen((message) async {
+      if (_isAiNotification(message)) {
+        debugPrint('AI notification ignored while app is open.');
+        return;
+      }
+
       await _showLocalNotification(message);
       await _saveNotificationToFirestore(message);
     });
-
     // 🔹 When tapped (background → foreground)
     FirebaseMessaging.onMessageOpenedApp.listen((message) async {
+      if (_isAiNotification(message)) {
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/home',
+          (route) => false,
+        );
+        return;
+      }
+
       _handleNavigation(
         jsonEncode({
           'route': message.data['route'],
           'listingId': message.data['listingId'],
         }),
       );
+
       await _saveNotificationToFirestore(message);
     });
 
-    // 🔹 When opened from terminated state
     final initialMessage = await firebaseMessaging.getInitialMessage();
+
     if (initialMessage != null) {
-      _handleNavigation(
-        jsonEncode({
-          'route': initialMessage.data['route'],
-          'listingId': initialMessage.data['listingId'],
-        }),
-      );
-      await _saveNotificationToFirestore(initialMessage);
+      if (_isAiNotification(initialMessage)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          navigatorKey.currentState?.pushNamedAndRemoveUntil(
+            '/home',
+            (route) => false,
+          );
+        });
+      } else {
+        _handleNavigation(
+          jsonEncode({
+            'route': initialMessage.data['route'],
+            'listingId': initialMessage.data['listingId'],
+          }),
+        );
+
+        await _saveNotificationToFirestore(initialMessage);
+      }
     }
 
     // Optional: print FCM token for testing

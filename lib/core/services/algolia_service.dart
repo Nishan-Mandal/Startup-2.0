@@ -77,14 +77,137 @@ class AlgoliaService {
   }
 
   static Future<void> trackCategoryFilter(String category) async {
-  final categoryName = category.trim();
+    final categoryName = category.trim();
 
-  if (categoryName.isEmpty) return;
+    if (categoryName.isEmpty) return;
 
-  try {
-    final url = Uri.parse(
-      "https://$appId-dsn.algolia.net/1/indexes/Listings/query",
+    try {
+      final url = Uri.parse(
+        "https://$appId-dsn.algolia.net/1/indexes/Listings/query",
+      );
+
+      final response = await _client.post(
+        url,
+        headers: {
+          "X-Algolia-API-Key": apiKey,
+          "X-Algolia-Application-Id": appId,
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "query": "",
+          "hitsPerPage": 1,
+          "attributesToRetrieve": ["objectID"],
+          "facetFilters": [
+            ["category:$categoryName"],
+          ],
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        debugPrint(
+          "Algolia category tracking failed: "
+          "${response.statusCode} ${response.body}",
+        );
+      }
+    } catch (e) {
+      debugPrint("Algolia category tracking error: $e");
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>>
+  _fetchSearchCandidatesForCategories() async {
+    final url = Uri.https("analytics.de.algolia.com", "/2/searches", {
+      "index": "Listings",
+      "limit": "10",
+      "orderBy": "searchCount",
+      "direction": "desc",
+    });
+
+    final response = await _client.get(
+      url,
+      headers: {
+        "X-Algolia-API-Key": analyticsApiKey,
+        "X-Algolia-Application-Id": appId,
+      },
     );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        "Category search candidates failed: "
+        "${response.statusCode} ${response.body}",
+      );
+    }
+
+    final data = jsonDecode(response.body);
+    final searches = data["searches"];
+
+    if (searches is! List) {
+      throw Exception("Invalid Algolia Analytics searches response");
+    }
+
+    final candidates = <Map<String, dynamic>>[];
+
+    for (final item in searches) {
+      final query = item["search"]?.toString().trim() ?? "";
+      final count = item["count"];
+
+      if (query.isEmpty) continue;
+
+      final normalizedQuery =
+          query
+              .toLowerCase()
+              .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+              .replaceAll(RegExp(r'\s+'), ' ')
+              .trim();
+
+      final queryTokens =
+          normalizedQuery
+              .split(' ')
+              .where((token) => token.isNotEmpty)
+              .toList();
+
+      // Ignore obvious incomplete one/two-character queries like "jo".
+      if (normalizedQuery.length < 3 ||
+          queryTokens.isEmpty ||
+          queryTokens.every((token) => token.length < 3)) {
+        continue;
+      }
+
+      final popularity =
+          count is num
+              ? count.toInt()
+              : int.tryParse(count?.toString() ?? "") ?? 0;
+
+      if (popularity <= 0) continue;
+
+      candidates.add({"query": query, "popularity": popularity});
+    }
+    return candidates;
+  }
+
+  static Future<List<Map<String, dynamic>>> _fetchListingsForCategoryCandidates(
+    List<Map<String, dynamic>> candidates,
+  ) async {
+    if (candidates.isEmpty) return [];
+
+    final url = Uri.parse("https://$appId-dsn.algolia.net/1/indexes/*/queries");
+
+    final requests =
+        candidates.map((candidate) {
+          final query = candidate["query"].toString();
+
+          return {
+            "indexName": "Listings",
+            "params":
+                Uri(
+                  queryParameters: {
+                    "query": query,
+                    "hitsPerPage": "5",
+                    "attributesToRetrieve": "objectID,category,tags,name",
+                  },
+                ).query,
+          };
+        }).toList();
 
     final response = await _client.post(
       url,
@@ -93,26 +216,90 @@ class AlgoliaService {
         "X-Algolia-Application-Id": appId,
         "Content-Type": "application/json",
       },
-      body: jsonEncode({
-        "query": "",
-        "hitsPerPage": 1,
-        "attributesToRetrieve": ["objectID"],
-        "facetFilters": [
-          ["category:$categoryName"],
-        ],
-      }),
+      body: jsonEncode({"requests": requests}),
     );
 
     if (response.statusCode != 200) {
-      debugPrint(
-        "Algolia category tracking failed: "
+      throw Exception(
+        "Category listing lookup failed: "
         "${response.statusCode} ${response.body}",
       );
     }
-  } catch (e) {
-    debugPrint("Algolia category tracking error: $e");
+
+    final data = jsonDecode(response.body);
+    final results = data["results"];
+
+    if (results is! List) {
+      throw Exception("Invalid Algolia multi-query response");
+    }
+
+    final matchedCandidates = <Map<String, dynamic>>[];
+
+    for (int i = 0; i < candidates.length && i < results.length; i++) {
+      final candidate = candidates[i];
+      final hits = results[i]["hits"];
+
+      if (hits is! List || hits.isEmpty) continue;
+
+      matchedCandidates.add({
+        "query": candidate["query"],
+        "popularity": candidate["popularity"],
+        "hits": hits,
+      });
+    }
+
+    return matchedCandidates;
   }
-}
+
+  static List<Map<String, dynamic>> _buildTrendingCategoryScores(
+    List<Map<String, dynamic>> matchedCandidates,
+  ) {
+    final categoryScores = <String, int>{};
+
+    for (final candidate in matchedCandidates) {
+      final popularity = candidate["popularity"] as int? ?? 0;
+      final hits = candidate["hits"];
+
+      if (hits is! List) continue;
+
+      // Ek search ke andar same category ko ek hi baar count karo.
+      final categoriesForSearch = <String>{};
+
+      for (final hit in hits) {
+        if (hit is! Map) continue;
+
+        final category = hit["category"]?.toString().trim() ?? "";
+
+        if (category.isNotEmpty) {
+          categoriesForSearch.add(category);
+        }
+      }
+
+      for (final category in categoriesForSearch) {
+        categoryScores.update(
+          category,
+          (score) => score + popularity,
+          ifAbsent: () => popularity,
+        );
+      }
+    }
+
+    final rankedCategories =
+        categoryScores.entries
+            .map(
+              (entry) => <String, dynamic>{
+                "name": entry.key,
+                "score": entry.value,
+              },
+            )
+            .toList();
+
+    rankedCategories.sort(
+      (a, b) => (b["score"] as int).compareTo(a["score"] as int),
+    );
+
+    return rankedCategories;
+  }
 
   static Future<List<dynamic>> getTopCategories() async {
     final prefs = await SharedPreferences.getInstance();
@@ -160,143 +347,136 @@ class AlgoliaService {
   }
 
   static Future<List<dynamic>> _refreshTrendingCategories() async {
-  final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
 
-  //Analytics se trending categories lao
-  final analyticsUrl = Uri.https(
-    "analytics.de.algolia.com",
-    "/2/filters/category",
-    {
-      "index": "Listings",
-      "limit": "8",
-    },
-  );
+    //Fetch popular search queries from Algolia Analytics.
+    final candidates = await _fetchSearchCandidatesForCategories();
 
-  final analyticsResponse = await _client.get(
-    analyticsUrl,
-    headers: {
-      "X-Algolia-API-Key": analyticsApiKey,
-      "X-Algolia-Application-Id": appId,
-    },
-  );
-
-  if (analyticsResponse.statusCode != 200) {
-    throw Exception(
-      "Algolia trending categories failed: "
-      "${analyticsResponse.statusCode} "
-      "${analyticsResponse.body}",
-    );
-  }
-
-  final analyticsData = jsonDecode(analyticsResponse.body);
-  final values = analyticsData["values"];
-
-  if (values is! List || values.isEmpty) {
-    return [];
-  }
-
-  // Analytics se category names nikalo
-  final categoryNames =
-      values
-          .map((item) => item["value"]?.toString().trim() ?? "")
-          .where((name) => name.isNotEmpty)
-          .toList();
-
-  if (categoryNames.isEmpty) {
-    return [];
-  }
-
-  // categories index se sirf required fields lao
-  final requests =
-      categoryNames.map((categoryName) {
-        return {
-          "indexName": "categories",
-          "params":
-              "query=${Uri.encodeQueryComponent(categoryName)}"
-              "&hitsPerPage=1"
-              "&attributesToRetrieve="
-              "categoryId,name,description,imageUrl,tags,section,createdAt",
-        };
-      }).toList();
-
-  final searchUrl = Uri.parse(
-    "https://$appId-dsn.algolia.net/1/indexes/*/queries",
-  );
-
-  final searchResponse = await _client.post(
-    searchUrl,
-    headers: {
-      "X-Algolia-API-Key": apiKey,
-      "X-Algolia-Application-Id": appId,
-      "Content-Type": "application/json",
-    },
-    body: jsonEncode({
-      "requests": requests,
-    }),
-  );
-
-  if (searchResponse.statusCode != 200) {
-    throw Exception(
-      "Algolia category hydration failed: "
-      "${searchResponse.statusCode} "
-      "${searchResponse.body}",
-    );
-  }
-
-  final searchData = jsonDecode(searchResponse.body);
-  final results = searchData["results"];
-
-  if (results is! List) {
-    return [];
-  }
-
-  final List<dynamic> trendingCategories = [];
-
-  // Analytics ka original order preserve krna hai
-  for (
-    int i = 0;
-    i < categoryNames.length && i < results.length;
-    i++
-  ) {
-    final expectedName =
-        categoryNames[i].trim().toLowerCase();
-
-    final hits = results[i]["hits"];
-
-    if (hits is! List || hits.isEmpty) {
-      continue;
+    if (candidates.isEmpty) {
+      debugPrint("No search candidates available for trending categories.");
+      return [];
     }
 
-    final hit = hits.first;
-
-    final actualName =
-        hit["name"]?.toString().trim().toLowerCase() ?? "";
-
-    // Exact category match hona chahie
-    if (actualName == expectedName) {
-      trendingCategories.add(hit);
-    }
-
-    if (trendingCategories.length == 8) {
-      break;
-    }
-  }
-
-  // Successful result ko cache karo
-  if (trendingCategories.isNotEmpty) {
-    await prefs.setString(
-      _trendingCategoriesCacheKey,
-      jsonEncode(trendingCategories),
+    //Match popular searches against Listings.
+    final matchedCandidates = await _fetchListingsForCategoryCandidates(
+      candidates,
     );
 
-    await prefs.setInt(
-      _trendingCategoriesCacheTimeKey,
-      DateTime.now().millisecondsSinceEpoch,
+    if (matchedCandidates.isEmpty) {
+      debugPrint("No listings matched trending category searches.");
+      return [];
+    }
+
+    //Rank categories by the popularity of matching searches.
+    final rankedCategories = _buildTrendingCategoryScores(matchedCandidates);
+
+    if (rankedCategories.isEmpty) {
+      debugPrint("No categories found from matching listings.");
+      return [];
+    }
+
+    // Keep the top candidates; exact matching happens during hydration.
+    final categoryNames =
+        rankedCategories
+            .map((item) => item["name"]?.toString().trim() ?? "")
+            .where((name) => name.isNotEmpty)
+            .take(20)
+            .toList();
+
+    if (categoryNames.isEmpty) return [];
+
+    // Fetch matching documents from the categories index.
+    final requests =
+        categoryNames.map((categoryName) {
+          return {
+            "indexName": "categories",
+            "params":
+                Uri(
+                  queryParameters: {
+                    "query": categoryName,
+                    "hitsPerPage": "5",
+                    "attributesToRetrieve":
+                        "categoryId,name,description,imageUrl,tags,section,createdAt",
+                  },
+                ).query,
+          };
+        }).toList();
+
+    final searchUrl = Uri.parse(
+      "https://$appId-dsn.algolia.net/1/indexes/*/queries",
     );
+
+    final searchResponse = await _client.post(
+      searchUrl,
+      headers: {
+        "X-Algolia-API-Key": apiKey,
+        "X-Algolia-Application-Id": appId,
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode({"requests": requests}),
+    );
+
+    if (searchResponse.statusCode != 200) {
+      throw Exception(
+        "Algolia category hydration failed: "
+        "${searchResponse.statusCode} ${searchResponse.body}",
+      );
+    }
+
+    final searchData = jsonDecode(searchResponse.body);
+    final results = searchData["results"];
+
+    if (results is! List) {
+      throw Exception("Invalid Algolia category hydration response");
+    }
+
+    final List<dynamic> trendingCategories = [];
+    final seenCategoryNames = <String>{};
+
+    // Preserve popularity ranking and accept only exact category names.
+    for (int i = 0; i < categoryNames.length && i < results.length; i++) {
+      final expectedName = categoryNames[i].toLowerCase();
+      final hits = results[i]["hits"];
+
+      if (hits is! List || hits.isEmpty) continue;
+
+      Map<String, dynamic>? exactHit;
+
+      for (final item in hits) {
+        if (item is! Map) continue;
+
+        final actualName = item["name"]?.toString().trim().toLowerCase() ?? "";
+
+        if (actualName == expectedName) {
+          exactHit = Map<String, dynamic>.from(item);
+          break;
+        }
+      }
+
+      if (exactHit == null) continue;
+      if (!seenCategoryNames.add(expectedName)) continue;
+
+      trendingCategories.add(exactHit);
+
+      if (trendingCategories.length == 8) break;
+    }
+
+    // Cache only a successful non-empty result.
+    if (trendingCategories.isNotEmpty) {
+      await prefs.setString(
+        _trendingCategoriesCacheKey,
+        jsonEncode(trendingCategories),
+      );
+
+      await prefs.setInt(
+        _trendingCategoriesCacheTimeKey,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    }
+
+    return trendingCategories;
   }
 
-  return trendingCategories;
-}
   static Future<List<Map<String, dynamic>>> getTrendingSearches() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -449,7 +629,7 @@ class AlgoliaService {
         validSearches.add(candidates[i]);
       }
 
-      if (validSearches.length == 6) {
+      if (validSearches.length == 8) {
         break;
       }
     }
