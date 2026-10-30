@@ -11,8 +11,8 @@ class NotificationService {
   static final firebaseMessaging = FirebaseMessaging.instance;
   static final _localNotifications = FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
-  static bool _isAiNotification(RemoteMessage message) {
-    return message.data['type'] == 'ai_general';
+  static bool _showNotificationInApp(RemoteMessage message) {
+    return message.data['showInApp'] != 'false';
   }
 
   /// Initialize Firebase Messaging + Local Notifications
@@ -55,8 +55,8 @@ class NotificationService {
 
     // 🔹 Foreground message handling
     FirebaseMessaging.onMessage.listen((message) async {
-      if (_isAiNotification(message)) {
-        debugPrint('AI notification ignored while app is open.');
+      if (!_showNotificationInApp(message)) {
+        debugPrint('In-app notification skipped: ${message.data['type']}');
         return;
       }
 
@@ -65,7 +65,7 @@ class NotificationService {
     });
     // 🔹 When tapped (background → foreground)
     FirebaseMessaging.onMessageOpenedApp.listen((message) async {
-      if (_isAiNotification(message)) {
+      if (_showNotificationInApp(message)) {
         navigatorKey.currentState?.pushNamedAndRemoveUntil(
           '/home',
           (route) => false,
@@ -86,7 +86,7 @@ class NotificationService {
     final initialMessage = await firebaseMessaging.getInitialMessage();
 
     if (initialMessage != null) {
-      if (_isAiNotification(initialMessage)) {
+      if (_showNotificationInApp(initialMessage)) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           navigatorKey.currentState?.pushNamedAndRemoveUntil(
             '/home',
