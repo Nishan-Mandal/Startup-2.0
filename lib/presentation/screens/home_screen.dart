@@ -12,6 +12,7 @@ import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/presentation/screens/search_screen.dart';
 import 'package:startup_20/providers/bottom_nav_provider.dart';
+import 'package:startup_20/providers/location_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -36,6 +37,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _featuredListings = fetchFeaturedListings();
     _newAddedListings = fetchNewListings();
     _recommendedListings = fetchRecommendedListings();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<LocationProvider>().initLocation();
+    });
   }
 
   Future<List<Listing>> fetchFeaturedListings() async {

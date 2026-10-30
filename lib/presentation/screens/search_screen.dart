@@ -3,14 +3,16 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/core/services/algolia_service.dart';
+import 'package:startup_20/data/models/filter_options_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/category_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
+import 'package:startup_20/presentation/common_methods/searchable_dropdown.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/presentation/screens/listing_screen.dart';
 import 'package:startup_20/providers/auth_provider.dart';
@@ -36,6 +38,7 @@ class _SearchScreenState extends State<SearchScreen> {
   List<String> sessionSearches = [];
 
   List<Category> categoryResults = [];
+  List<Listing> _allFetchedListings = [];
   List<Listing> listingResults = [];
   List<String> tagResults = [];
   List<Category> topCategories = [];
@@ -43,6 +46,8 @@ class _SearchScreenState extends State<SearchScreen> {
   bool isTopCategoriesLoading = true;
   bool isTrendingSearchesLoading = true;
   bool showSuggestions = true;
+  ListingFilterOptions _filterOptions = const ListingFilterOptions();
+  Position? _userPosition;
 
   @override
   void initState() {
@@ -50,9 +55,34 @@ class _SearchScreenState extends State<SearchScreen> {
     _loadRecentSearches();
     _loadTopCategories();
     _loadTrendingSearches();
+    _determinePosition();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FocusScope.of(context).requestFocus(_searchFocusNode);
     });
+  }
+
+  Future<void> _determinePosition() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+      if (!mounted) return;
+      setState(() {
+        _userPosition = pos;
+      });
+      if (_filterOptions.maxDistanceKm != null ||
+          _filterOptions.sortBy == 'distance') {
+        _onFilterApplied(_filterOptions);
+      }
+    } catch (e) {
+      debugPrint("Error determining location: $e");
+    }
   }
 
   /// 🔹 Load recent searches from SharedPreferences
@@ -143,9 +173,21 @@ class _SearchScreenState extends State<SearchScreen> {
     await _saveRecentSearches();
   }
 
+  void _clearSearch() {
+    _controller.clear();
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _search("");
+    _searchFocusNode.requestFocus();
+  }
+
   /// Debounced Search
   void _onSearchChanged(String text) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
+    if (text.isEmpty) {
+      _search("");
+      return;
+    }
+    setState(() {});
     _debounce = Timer(const Duration(milliseconds: 150), () {
       _search(text.trim());
     });
@@ -158,6 +200,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (text.isEmpty) {
       setState(() {
         query = "";
+        _allFetchedListings = [];
         listingResults = [];
         categoryResults = [];
         tagResults = [];
@@ -165,6 +208,7 @@ class _SearchScreenState extends State<SearchScreen> {
         isLoading = false;
         isSearching = false;
         isListingLoading = false;
+        _filterOptions = const ListingFilterOptions();
       });
       return;
     }
@@ -263,9 +307,10 @@ class _SearchScreenState extends State<SearchScreen> {
       if (!mounted || requestId != _searchRequestId) {
         return;
       }
-      // 🔹 Update UI
+      // 🔹 Update UI with filtered and sorted listings
       setState(() {
-        listingResults = filteredListings;
+        _allFetchedListings = filteredListings;
+        listingResults = _filterAndSortListings(filteredListings);
         isListingLoading = false;
         isLoading = false;
       });
@@ -315,8 +360,293 @@ class _SearchScreenState extends State<SearchScreen> {
     super.dispose();
   }
 
+  void _onFilterApplied(ListingFilterOptions newFilter) {
+    setState(() {
+      _filterOptions = newFilter;
+    });
+
+    if (_allFetchedListings.isNotEmpty) {
+      setState(() {
+        listingResults = _filterAndSortListings(_allFetchedListings);
+      });
+    } else if (_controller.text.trim().isNotEmpty) {
+      _search(_controller.text.trim());
+    }
+  }
+
+  List<Listing> _filterAndSortListings(List<Listing> rawListings) {
+    List<Listing> filtered = List.from(rawListings);
+
+    //Filter by Minimum Rating
+    if (_filterOptions.minRating != null) {
+      filtered =
+          filtered.where((l) => l.rating >= _filterOptions.minRating!).toList();
+    }
+
+    //Filter by Open Now
+    if (_filterOptions.openNowOnly) {
+      filtered = filtered.where((l) => _isListingOpenNow(l)).toList();
+    }
+
+    //Filter by Online Payments
+    if (_filterOptions.acceptsOnlinePayment) {
+      filtered =
+          filtered.where((l) {
+            final val = l.details['Accept Online Payments']?.toLowerCase();
+            return val == 'yes' || val == 'true';
+          }).toList();
+    }
+
+    //Filter by Distance
+    if (_filterOptions.maxDistanceKm != null && _userPosition != null) {
+      final maxMeters = _filterOptions.maxDistanceKm! * 1000;
+      filtered =
+          filtered.where((l) {
+            if (l.geo.lat == 0.0 && l.geo.lng == 0.0) return false;
+            final dist = Geolocator.distanceBetween(
+              _userPosition!.latitude,
+              _userPosition!.longitude,
+              l.geo.lat,
+              l.geo.lng,
+            );
+            return dist <= maxMeters;
+          }).toList();
+    }
+
+    //Sorting
+    switch (_filterOptions.sortBy) {
+      case 'rating':
+        filtered.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case 'popular':
+        filtered.sort(
+          (a, b) => (b.views + b.likes).compareTo(a.views + a.likes),
+        );
+        break;
+      case 'newest':
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+      case 'distance':
+        if (_userPosition != null) {
+          filtered.sort((a, b) {
+            final distA =
+                (a.geo.lat == 0 && a.geo.lng == 0)
+                    ? double.infinity
+                    : Geolocator.distanceBetween(
+                      _userPosition!.latitude,
+                      _userPosition!.longitude,
+                      a.geo.lat,
+                      a.geo.lng,
+                    );
+            final distB =
+                (b.geo.lat == 0 && b.geo.lng == 0)
+                    ? double.infinity
+                    : Geolocator.distanceBetween(
+                      _userPosition!.latitude,
+                      _userPosition!.longitude,
+                      b.geo.lat,
+                      b.geo.lng,
+                    );
+            return distA.compareTo(distB);
+          });
+        }
+        break;
+      case 'relevance':
+      default:
+        // Algolia se fetched order preserved
+        break;
+    }
+
+    return filtered;
+  }
+
+  bool _isListingOpenNow(Listing listing) {
+    if (listing.businessHours.isEmpty) return false;
+    const days = [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday",
+    ];
+    final now = DateTime.now();
+    final currentDay = days[now.weekday - 1];
+    final schedule = listing.businessHours[currentDay];
+    if (schedule == null || schedule.isClosed || schedule.slots.isEmpty) {
+      return false;
+    }
+    final nowTime = TimeOfDay.fromDateTime(now);
+    final currentMinutes = nowTime.hour * 60 + nowTime.minute;
+    for (final slot in schedule.slots) {
+      final openMinutes = slot.open.hour * 60 + slot.open.minute;
+      final closeMinutes = slot.close.hour * 60 + slot.close.minute;
+      if (currentMinutes >= openMinutes && currentMinutes <= closeMinutes) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Widget _buildActiveFilterChips() {
+    final chips = <Widget>[];
+
+    //Sorting
+    if (_filterOptions.sortBy != 'relevance') {
+      final sortLabels = {
+        'rating': '★ Highest Rated',
+        'distance': 'Nearest First',
+        'popular': 'Most Popular',
+        'newest': 'Newest First',
+      };
+      chips.add(
+        _buildSingleFilterChip(
+          label: sortLabels[_filterOptions.sortBy] ?? _filterOptions.sortBy,
+          icon: Icons.swap_vert_rounded,
+          onDeleted: () {
+            _onFilterApplied(_filterOptions.copyWith(sortBy: 'relevance'));
+          },
+        ),
+      );
+    }
+
+    //Rating
+    if (_filterOptions.minRating != null) {
+      chips.add(
+        _buildSingleFilterChip(
+          label: "★ ${_filterOptions.minRating}+",
+          onDeleted: () {
+            _onFilterApplied(_filterOptions.copyWith(clearMinRating: true));
+          },
+        ),
+      );
+    }
+
+    //Distance
+    if (_filterOptions.maxDistanceKm != null) {
+      chips.add(
+        _buildSingleFilterChip(
+          label: "< ${_filterOptions.maxDistanceKm!.toInt()} km",
+          icon: Icons.near_me_rounded,
+          onDeleted: () {
+            _onFilterApplied(_filterOptions.copyWith(clearMaxDistanceKm: true));
+          },
+        ),
+      );
+    }
+
+    //Open Now
+    if (_filterOptions.openNowOnly) {
+      chips.add(
+        _buildSingleFilterChip(
+          label: "Open Now",
+          icon: Icons.access_time_filled_rounded,
+          activeColor: Colors.green,
+          onDeleted: () {
+            _onFilterApplied(_filterOptions.copyWith(openNowOnly: false));
+          },
+        ),
+      );
+    }
+
+    //Online Payment
+    if (_filterOptions.acceptsOnlinePayment) {
+      chips.add(
+        _buildSingleFilterChip(
+          label: "Online Payment",
+          icon: Icons.payments_rounded,
+          onDeleted: () {
+            _onFilterApplied(
+              _filterOptions.copyWith(acceptsOnlinePayment: false),
+            );
+          },
+        ),
+      );
+    }
+
+    //Clear All
+    chips.add(
+      GestureDetector(
+        onTap: () {
+          _onFilterApplied(const ListingFilterOptions());
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+          decoration: BoxDecoration(
+            color: Colors.redAccent.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: const Text(
+            "Clear All",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.redAccent,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return SizedBox(
+      height: 36,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: chips.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) => chips[i],
+      ),
+    );
+  }
+
+  Widget _buildSingleFilterChip({
+    required String label,
+    IconData? icon,
+    Color? activeColor,
+    required VoidCallback onDeleted,
+  }) {
+    final iconColor = activeColor ?? AppColors.THEME_COLOR;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.THEME_COLOR.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 16, color: iconColor),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppColors.BLACK,
+            ),
+          ),
+          const SizedBox(width: 5),
+          GestureDetector(
+            onTap: onDeleted,
+            child: const Icon(
+              Icons.close_rounded,
+              size: 16,
+              color: AppColors.BLACK_54,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool hasSearchText =
+        _controller.text.trim().isNotEmpty || query.isNotEmpty;
+
     return Scaffold(
       backgroundColor: AppColors.WHITE,
       body: SafeArea(
@@ -339,14 +669,34 @@ class _SearchScreenState extends State<SearchScreen> {
                           icon: const Icon(Icons.arrow_back),
                           onPressed: () => Navigator.of(context).pop(),
                         ),
-                        suffixIcon: Container(
-                          margin: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: AppColors.THEME_COLOR,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.tune, color: AppColors.WHITE),
-                        ),
+                        suffixIcon:
+                            hasSearchText
+                                ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.close_rounded,
+                                        size: 20,
+                                        color: AppColors.BLACK_54,
+                                      ),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 36,
+                                        minHeight: 36,
+                                      ),
+                                      onPressed: _clearSearch,
+                                    ),
+                                    SearchableDropdown(
+                                      style: SearchableDropdownStyle.icon,
+                                      filterOptions: _filterOptions,
+                                      activeFilterCount:
+                                          _filterOptions.activeFilterCount,
+                                      onFilterApplied: _onFilterApplied,
+                                    ),
+                                  ],
+                                )
+                                : null,
                         filled: true,
                         fillColor: AppColors.GREY_SHADE_100,
                         border: OutlineInputBorder(
@@ -358,13 +708,19 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+
+              // 🔹 Active Filter Chips
+              if (_filterOptions.hasActiveFilters && hasSearchText) ...[
+                const SizedBox(height: 10),
+                _buildActiveFilterChips(),
+              ],
 
               // 🔹 Recent Searches
               if (recentSearches.isNotEmpty && query.isEmpty)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const SizedBox(height: 14),
                     const Text(
                       "Recent Searches",
                       style: TextStyle(
@@ -742,26 +1098,57 @@ class _SearchScreenState extends State<SearchScreen> {
               listingResults.isEmpty &&
               categoryResults.isEmpty &&
               tagResults.isEmpty)
-            const Center(
+            Center(
               child: Column(
                 children: [
-                  SizedBox(height: 15),
-                  Text(
-                    "Uh-oh!",
+                  const SizedBox(height: 24),
+                  Icon(
+                    Icons.search_off_rounded,
+                    size: 56,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "Uh - ohh",
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: AppColors.BLACK_54,
                     ),
                   ),
-                  Text(
+                  const Text(
                     "No results found!",
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: AppColors.BLACK_54,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _filterOptions.hasActiveFilters
+                        ? "Try clearing filters or searching with another keyword"
+                        : "Try searching with another keyword",
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                  if (_filterOptions.hasActiveFilters) ...[
+                    const SizedBox(height: 14),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.THEME_COLOR,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        _onFilterApplied(const ListingFilterOptions());
+                      },
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text("Reset Filters"),
+                    ),
+                  ],
                 ],
               ),
             )
@@ -876,13 +1263,26 @@ class _SearchScreenState extends State<SearchScreen> {
                     (context, index) => CommonWidgets.shimmerlistingCard(),
               ),
             ] else if (listingResults.isNotEmpty) ...[
-              const Text(
-                "Listings",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.BLACK_54,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Listings",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.BLACK_54,
+                    ),
+                  ),
+                  Text(
+                    "${listingResults.length} found",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               GridView.builder(
@@ -909,31 +1309,52 @@ class _SearchScreenState extends State<SearchScreen> {
                   );
                 },
               ),
+            ] else if (_allFetchedListings.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.filter_list_off_rounded,
+                      size: 46,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "No listings match your active filters",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.BLACK_54,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      "Try adjusting rating, distance, or category filters",
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 14),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.THEME_COLOR,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        _onFilterApplied(const ListingFilterOptions());
+                      },
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text("Reset Filters"),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ],
         ],
-      ),
-    );
-  }
-
-  static Widget categoryTileLoader() {
-    return Shimmer.fromColors(
-      baseColor: AppColors.GREY_SHADE_300,
-      highlightColor: AppColors.GREY_SHADE_100,
-      child: ListTile(
-        leading: Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: AppColors.GREY_SHADE_300,
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        title: Container(
-          height: 14,
-          color: AppColors.GREY_SHADE_300,
-          margin: const EdgeInsets.symmetric(vertical: 4),
-        ),
       ),
     );
   }
