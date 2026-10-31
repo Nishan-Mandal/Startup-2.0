@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/presentation/common_methods/searchable_dropdown.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/notification_screen.dart';
 import 'package:startup_20/presentation/screens/profile_screen.dart';
@@ -201,55 +202,10 @@ class CommonWidgets {
     );
   }
 
-  /// 🔹 Location Selector with PopupMenu
+  /// 🔹 Location Selector
   static Widget _locationSelector(BuildContext context) {
-    String currentLocation = "Haldia, West Bengal";
-
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return PopupMenuButton<String>(
-          offset: const Offset(0, 40), // position of dropdown
-          color: AppColors.WHITE,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          onSelected: (value) {
-            setState(() {
-              currentLocation = value;
-            });
-          },
-          itemBuilder:
-              (context) => [
-                const PopupMenuItem(
-                  value: "Haldia, West Bengal",
-                  child: Text(
-                    "Haldia, West Bengal",
-                    style: TextStyle(color: AppColors.BLACK),
-                  ),
-                ),
-                // 🔹 Add more locations here later
-              ],
-          child: Row(
-            children: [
-              const Icon(
-                Icons.location_on_outlined,
-                color: AppColors.BLACK_54,
-                size: 20,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                currentLocation,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                  color: AppColors.BLACK_54,
-                ),
-              ),
-              const Icon(Icons.arrow_drop_down, color: AppColors.BLACK_54),
-            ],
-          ),
-        );
-      },
+    return const SearchableDropdown(
+      style: SearchableDropdownStyle.location,
     );
   }
 

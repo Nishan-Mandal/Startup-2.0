@@ -13,6 +13,7 @@ import 'package:startup_20/presentation/screens/onboarding_screen.dart';
 import 'package:startup_20/providers/chat_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/bottom_nav_provider.dart';
+import 'providers/location_provider.dart';
 import 'presentation/screens/bottom_nav_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -31,6 +32,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => AppAuthProvider()),
         ChangeNotifierProvider(create: (_) => BottomNavProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(create: (_) => LocationProvider()..initLocation()),
       ],
 
       child: const MyApp(),
