@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -22,7 +24,7 @@ class CommonMethods {
     Listing listing,
     List<Listing> similarListings,
   ) {
-    preloadListingImages(context,listing);
+    preloadListingImages(context, listing);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -221,6 +223,32 @@ class CommonMethods {
 
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       debugPrint('Could not launch WhatsApp');
+    }
+  }
+
+  /// Opens the application page on Google Play or App Store with browser fallback.
+  static void openAppStore({String? customUrl}) async {
+    final String storeUrl =
+        customUrl ??
+        (Platform.isAndroid
+            ? "market://details?id=com.findon.app"
+            : "https://apps.apple.com/app/id6470000000");
+
+    final Uri uri = Uri.parse(storeUrl);
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && Platform.isAndroid) {
+        // Fallback to web browser if Play Store app fails
+        final webUri = Uri.parse(
+          "https://play.google.com/store/apps/details?id=com.findon.app",
+        );
+        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint("Error opening store: $e");
     }
   }
 }
