@@ -204,9 +204,169 @@ class CommonWidgets {
 
   /// 🔹 Location Selector
   static Widget _locationSelector(BuildContext context) {
-    return const SearchableDropdown(
-      style: SearchableDropdownStyle.location,
+    return const SearchableDropdown(style: SearchableDropdownStyle.location);
+  }
+
+  /// Tile banner indicating that an optional update is available.
+  static Widget appUpdateTile({
+    required VoidCallback onTap,
+    String title = "App update available",
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        decoration: BoxDecoration(
+          color: AppColors.WHITE,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.GREY_SHADE_300),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.BLACK_12.withValues(alpha: 0.04),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: AppColors.THEME_COLOR.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.sync_rounded,
+                color: AppColors.THEME_COLOR,
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.BLACK,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.grey.shade500,
+              size: 22,
+            ),
+          ],
+        ),
+      ),
     );
+  }
+
+  static BuildContext? _activeForcedDialogContext;
+
+  /// Dismisses the forced update dialog if currently presented.
+  static void closeForcedUpdateDialog() {
+    if (_activeForcedDialogContext != null &&
+        _activeForcedDialogContext!.mounted) {
+      Navigator.of(_activeForcedDialogContext!).pop();
+      _activeForcedDialogContext = null;
+    }
+  }
+
+  /// Displays a blocking, non-dismissible dialog when an update is mandatory.
+  static Future<void> showForcedUpdateDialog({
+    required BuildContext context,
+    required VoidCallback onUpdateTap,
+    String title = "Update Required",
+    String message =
+        "A new version of Needmet is available Please update to continue using the app.",
+  }) {
+    // Prevent presenting multiple dialog instances.
+    if (_activeForcedDialogContext != null &&
+        _activeForcedDialogContext!.mounted) {
+      return Future.value();
+    }
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        _activeForcedDialogContext = dialogContext;
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: AppColors.THEME_COLOR.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.system_security_update_rounded,
+                    size: 34,
+                    color: AppColors.THEME_COLOR,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.BLACK,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: Colors.grey.shade600,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.THEME_COLOR,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: onUpdateTap,
+                    child: const Text(
+                      "Update Now",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.WHITE,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ).then((_) => _activeForcedDialogContext = null);
   }
 
   static Widget searchBar() {

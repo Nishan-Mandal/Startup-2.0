@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -5,6 +7,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
+import 'package:startup_20/core/services/app_update_service.dart';
 import 'package:startup_20/data/models/home_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
@@ -30,6 +33,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int _currentBanner = 0;
 
+  // App update state and stream subscription
+  AppUpdateInfo? _appUpdateInfo;
+  StreamSubscription<AppUpdateInfo>? _updateSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +46,49 @@ class _HomeScreenState extends State<HomeScreen> {
     _recommendedListings = fetchRecommendedListings();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<LocationProvider>().initLocation();
+      _listenToAppUpdates();
+    });
+  }
+
+  @override
+  void dispose() {
+    _updateSubscription?.cancel();
+    CommonWidgets.closeForcedUpdateDialog();
+    super.dispose();
+  }
+
+  void _listenToAppUpdates() {
+    _updateSubscription = AppUpdateService.getUpdateStream().listen((updateInfo) {
+      if (!mounted) return;
+
+      setState(() {
+        _appUpdateInfo = updateInfo.isUpdateAvailable ? updateInfo : null;
+      });
+
+      final bool needForcedDialog =
+          updateInfo.isUpdateAvailable && updateInfo.isForceUpdate;
+
+      if (needForcedDialog) {
+        CommonWidgets.showForcedUpdateDialog(
+          context: context,
+          title: "Update Required",
+          message:
+              updateInfo.updateMessage.isNotEmpty
+                  ? updateInfo.updateMessage
+                  : "A new version of NeedMet is available. Please update to continue using the app.",
+          onUpdateTap: () {
+            CommonMethods.openAppStore(
+              customUrl:
+                  updateInfo.storeUrl.isNotEmpty ? updateInfo.storeUrl : null,
+            );
+          },
+        );
+      } else {
+        // Dismiss forced update dialog if mandatory update is revoked
+        CommonWidgets.closeForcedUpdateDialog();
+      }
+    }, onError: (e) {
+      debugPrint("App update stream error: $e");
     });
   }
 
@@ -248,6 +298,25 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(child: const SizedBox(height: 8)),
 
               SliverToBoxAdapter(child: _dotsIndicator(homeData.promoBanners)),
+
+              /// Optional app update prompt
+              if (_appUpdateInfo != null &&
+                  _appUpdateInfo!.isUpdateAvailable &&
+                  !_appUpdateInfo!.isForceUpdate) ...[
+                const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                SliverToBoxAdapter(
+                  child: CommonWidgets.appUpdateTile(
+                    onTap: () {
+                      CommonMethods.openAppStore(
+                        customUrl:
+                            _appUpdateInfo!.storeUrl.isNotEmpty
+                                ? _appUpdateInfo!.storeUrl
+                                : null,
+                      );
+                    },
+                  ),
+                ),
+              ],
 
               SliverToBoxAdapter(child: const SizedBox(height: 20)),
 
