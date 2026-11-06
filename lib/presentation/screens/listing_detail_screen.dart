@@ -1053,7 +1053,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      isOpenNow ? "Open Now" : "Closed",
+                      todaySchedule?.is24Hours == true
+                          ? "Open 24 Hours"
+                          : (isOpenNow ? "Open Now" : "Closed"),
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -1765,23 +1767,33 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                                     style: TextStyle(color: Colors.grey),
                                   ),
                                 )
-                                : Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children:
-                                      schedule.slots.map((slot) {
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 2,
-                                          ),
-                                          child: Text(
-                                            "${_formatTime(slot.open)} – ${_formatTime(slot.close)}",
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                ),
+                                : schedule.is24Hours
+                                    ? const Center(
+                                      child: Text(
+                                        "Open 24 Hours",
+                                        style: TextStyle(
+                                          color: Colors.green,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    )
+                                    : Column(
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children:
+                                          schedule.slots.map((slot) {
+                                            return Padding(
+                                              padding: const EdgeInsets.symmetric(
+                                                vertical: 2,
+                                              ),
+                                              child: Text(
+                                                "${_formatTime(slot.open)} – ${_formatTime(slot.close)}",
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            );
+                                          }).toList(),
+                                    ),
                       ),
                     ],
                   );
@@ -1803,6 +1815,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   bool _isOpenNow(DaySchedule? schedule) {
     if (schedule == null || schedule.isClosed) return false;
+    if (schedule.is24Hours) return true;
 
     final now = TimeOfDay.now();
 
@@ -1811,8 +1824,15 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       final closeMinutes = slot.close.hour * 60 + slot.close.minute;
       final nowMinutes = now.hour * 60 + now.minute;
 
-      if (nowMinutes >= openMinutes && nowMinutes <= closeMinutes) {
-        return true;
+      if (openMinutes <= closeMinutes) {
+        if (nowMinutes >= openMinutes && nowMinutes <= closeMinutes) {
+          return true;
+        }
+      } else {
+        // Over midnight (e.g. 8 PM to 2 AM)
+        if (nowMinutes >= openMinutes || nowMinutes <= closeMinutes) {
+          return true;
+        }
       }
     }
 

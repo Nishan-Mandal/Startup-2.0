@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:animated_text_kit/animated_text_kit.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,6 +21,16 @@ import 'package:startup_20/presentation/common_methods/searchable_dropdown.dart'
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/data/models/category_model.dart' as models;
 import 'package:startup_20/providers/auth_provider.dart';
+
+class DuplicateListingMatch {
+  final Listing listing;
+  final List<String> matchedReasons;
+
+  DuplicateListingMatch({
+    required this.listing,
+    required this.matchedReasons,
+  });
+}
 
 class AddListingScreen extends StatefulWidget {
   final Listing? existingListing;
@@ -54,8 +67,18 @@ class _AddListingScreenState extends State<AddListingScreen> {
   String? _selectedCategoryName;
   bool _draftLoaded = false;
 
+  static const int _maxImagesLimit = 15;
   final List<File> _images = [];
   List<ImageFile> _remoteImages = [];
+
+  int get _totalImagesCount => _remoteImages.length + _images.length;
+  int get _remainingImageSlots => _maxImagesLimit - _totalImagesCount;
+
+  Timer? _duplicateCheckDebounce;
+  bool _isCheckingDuplicates = false;
+  List<DuplicateListingMatch> _duplicateMatches = [];
+  String _lastCheckedKey = "";
+  int _duplicateCheckCounter = 0;
 
   bool _addOpenHours = false;
 
@@ -134,6 +157,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
   @override
   void dispose() {
+    _duplicateCheckDebounce?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -453,7 +477,21 @@ class _AddListingScreenState extends State<AddListingScreen> {
     _selectedCategoryId = listing.categoryId;
     _selectedCategoryName = listing.category;
     if (listing.businessHours.isNotEmpty) {
-      _businessHours = listing.businessHours;
+      _businessHours = {
+        for (var day in weekDays)
+          day:
+              listing.businessHours[day] ??
+              DaySchedule(
+                isClosed: false,
+                is24Hours: false,
+                slots: [
+                  TimeSlot(
+                    open: const TimeOfDay(hour: 9, minute: 0),
+                    close: const TimeOfDay(hour: 17, minute: 0),
+                  ),
+                ],
+              ),
+      };
       _addOpenHours = true;
     }
 
@@ -503,17 +541,39 @@ class _AddListingScreenState extends State<AddListingScreen> {
     }
   }
 
-  /// Pick multiple images
+  /// Pick multiple images from gallery
   Future<void> _pickImages() async {
     try {
+      if (_remainingImageSlots <= 0) {
+        _showError(
+          "Maximum limit of $_maxImagesLimit images reached. Please remove an image to add a new one.",
+        );
+        return;
+      }
+
       final picker = ImagePicker();
-      final pickedFiles = await picker.pickMultiImage();
+      final pickedFiles = await picker.pickMultiImage(
+        limit: _remainingImageSlots,
+      );
 
       if (pickedFiles.isEmpty) return;
 
+      final allowedSlots = _remainingImageSlots;
+      final filesToAdd =
+          pickedFiles
+              .take(allowedSlots)
+              .map((file) => File(file.path))
+              .toList();
+
       setState(() {
-        _images.addAll(pickedFiles.map((file) => File(file.path)));
+        _images.addAll(filesToAdd);
       });
+
+      if (pickedFiles.length > allowedSlots) {
+        _showError(
+          "Added ${filesToAdd.length} image(s). Maximum limit of $_maxImagesLimit reached.",
+        );
+      }
     } catch (e) {
       debugPrint("Image pick error: $e");
 
@@ -535,6 +595,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
     _businessHours.forEach((day, schedule) {
       data[day] = {
         "isClosed": schedule.isClosed,
+        "is24Hours": schedule.is24Hours,
         "slots":
             schedule.slots.map((slot) {
               return {
@@ -564,6 +625,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
       _businessHours[day] = DaySchedule(
         isClosed: scheduleData["isClosed"] ?? false,
+        is24Hours: scheduleData["is24Hours"] ?? false,
         slots: slots,
       );
     });
@@ -616,6 +678,11 @@ class _AddListingScreenState extends State<AddListingScreen> {
         social[key] = text;
       }
     });
+
+    if (_totalImagesCount > _maxImagesLimit) {
+      _showError("Maximum $_maxImagesLimit images allowed.");
+      return;
+    }
 
     final listing = Listing(
       listingId: widget.existingListing?.listingId ?? 'draft',
@@ -727,6 +794,13 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
 
   void _showImageSourcePicker() {
+    if (_remainingImageSlots <= 0) {
+      _showError(
+        "Maximum limit of $_maxImagesLimit images reached. Please remove an image to add a new one.",
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -760,6 +834,13 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
 
   Future<void> _takePhoto() async {
+    if (_remainingImageSlots <= 0) {
+      _showError(
+        "Maximum limit of $_maxImagesLimit images reached. Please remove an image to add a new one.",
+      );
+      return;
+    }
+
     final picker = ImagePicker();
 
     final pickedFile = await picker.pickImage(
@@ -769,6 +850,10 @@ class _AddListingScreenState extends State<AddListingScreen> {
     );
 
     if (pickedFile != null) {
+      if (_remainingImageSlots <= 0) {
+        _showError("Maximum limit of $_maxImagesLimit images reached.");
+        return;
+      }
       setState(() {
         _images.add(File(pickedFile.path));
       });
@@ -831,6 +916,12 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
       /// STEP 6 — IMAGES
       case 6:
+        if (_totalImagesCount > _maxImagesLimit) {
+          _showError(
+            "Maximum $_maxImagesLimit images allowed. Please remove ${_totalImagesCount - _maxImagesLimit} image(s).",
+          );
+          return false;
+        }
         return true;
 
       /// STEP 7 — TAGS
@@ -944,133 +1035,128 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
 
   Widget _stepImages() {
+    final bool isLimitReached = _remainingImageSlots <= 0;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 👉 Paste:
           // Image Upload Box
           GestureDetector(
             onTap: () {
+              if (isLimitReached) {
+                _showError(
+                  "Maximum limit of $_maxImagesLimit images reached. Please remove an image to add a new one.",
+                );
+                return;
+              }
               _showImageSourcePicker();
             },
             child: Container(
               height: 150,
               decoration: BoxDecoration(
-                color: AppColors.GREY_SHADE_300,
+                color:
+                    isLimitReached
+                        ? Colors.grey.shade200
+                        : AppColors.GREY_SHADE_300,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color:
+                      isLimitReached
+                          ? Colors.grey.shade400
+                          : AppColors.THEME_COLOR.withValues(alpha: 0.3),
+                  width: 1.5,
+                ),
               ),
-              child: const Center(
+              child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.cloud_upload,
-                      size: 50,
-                      color: AppColors.BLACK_54,
+                      isLimitReached
+                          ? Icons.check_circle_outline
+                          : Icons.cloud_upload,
+                      size: 48,
+                      color: isLimitReached ? Colors.grey : AppColors.BLACK_54,
                     ),
-                    SizedBox(height: 8),
-                    Text("Tap to upload image"),
+                    const SizedBox(height: 8),
+                    Text(
+                      isLimitReached
+                          ? "Maximum $_maxImagesLimit images added"
+                          : "Tap to upload image",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color:
+                            isLimitReached
+                                ? Colors.grey.shade700
+                                : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isLimitReached
+                          ? "$_totalImagesCount / $_maxImagesLimit images (Limit reached)"
+                          : "$_totalImagesCount / $_maxImagesLimit images ($_remainingImageSlots slots remaining)",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color:
+                            isLimitReached
+                                ? Colors.red.shade700
+                                : AppColors.BLACK_54,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
           ),
-          SizedBox(height: 10),
+          const SizedBox(height: 16),
           // Remote images
-          if (isEditing && _remoteImages.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: SizedBox(
-                height: 120,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _remoteImages.length,
-                  itemBuilder: (context, index) {
-                    return Stack(
-                      children: [
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 8),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              _remoteImages[index].thumbUrl,
-                              width: 120,
-                              height: 120,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _remoteImages.removeAt(index);
-                              });
-                            },
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                color: AppColors.BLACK_54,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.close,
-                                size: 20,
-                                color: AppColors.WHITE,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
+          if (isEditing && _remoteImages.isNotEmpty) ...[
+            Text(
+              "Existing Images (${_remoteImages.length})",
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             ),
-          SizedBox(height: 10),
-          // Selected images
-          if (_images.isNotEmpty)
+            const SizedBox(height: 8),
             SizedBox(
               height: 120,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: _images.length,
+                itemCount: _remoteImages.length,
                 itemBuilder: (context, index) {
                   return Stack(
                     children: [
                       Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        margin: const EdgeInsets.only(right: 12),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            _images[index],
+                          child: Image.network(
+                            _remoteImages[index].thumbUrl,
                             width: 120,
                             height: 120,
                             fit: BoxFit.cover,
                           ),
                         ),
                       ),
-                      // ❌ Remove button
                       Positioned(
                         top: 4,
-                        right: 4,
+                        right: 16,
                         child: GestureDetector(
                           onTap: () {
                             setState(() {
-                              _images.removeAt(index);
+                              _remoteImages.removeAt(index);
                             });
                           },
                           child: Container(
+                            padding: const EdgeInsets.all(2),
                             decoration: const BoxDecoration(
                               color: AppColors.BLACK_54,
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
                               Icons.close,
-                              size: 20,
+                              size: 18,
                               color: AppColors.WHITE,
                             ),
                           ),
@@ -1081,7 +1167,65 @@ class _AddListingScreenState extends State<AddListingScreen> {
                 },
               ),
             ),
-          SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
+          // Selected images
+          if (_images.isNotEmpty) ...[
+            Text(
+              "New Images (${_images.length})",
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 120,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _images.length,
+                itemBuilder: (context, index) {
+                  return Stack(
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(right: 12),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            _images[index],
+                            width: 120,
+                            height: 120,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 16,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _images.removeAt(index);
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: const BoxDecoration(
+                              color: AppColors.BLACK_54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 18,
+                              color: AppColors.WHITE,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
         ],
       ),
     );
@@ -1206,13 +1350,720 @@ class _AddListingScreenState extends State<AddListingScreen> {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _header("Contact Details"),
           DynamicCategoryForm(
             schema: _contactFields!,
             controller: _contactFormCtrl,
+            onFieldChanged: (label, value) => _onContactDetailsChanged(),
+          ),
+          if (_isCheckingDuplicates)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.THEME_COLOR,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Checking credentials...",
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (_duplicateMatches.isNotEmpty)
+            _buildDuplicateListingsSection(),
+        ],
+      ),
+    );
+  }
+
+  String _cleanPhoneNumber(String input) {
+    String digits = input.replaceAll(RegExp(r'\D'), '');
+    while (digits.startsWith('0') && digits.length > 10) {
+      digits = digits.substring(1);
+    }
+    if (digits.startsWith('91') && digits.length > 10) {
+      digits = digits.substring(2);
+    }
+    while (digits.startsWith('0') && digits.length > 10) {
+      digits = digits.substring(1);
+    }
+    return digits;
+  }
+
+  void _onContactDetailsChanged() {
+    _duplicateCheckDebounce?.cancel();
+    _duplicateCheckDebounce = Timer(const Duration(milliseconds: 600), () {
+      _checkDuplicateListings();
+    });
+  }
+
+  Future<void> _checkDuplicateListings() async {
+    final rawPhone =
+        _contactFormCtrl.values['Phone']?.toString().trim() ?? '';
+    final rawAltPhone =
+        _contactFormCtrl.values['Alternate Phone (Optional)']
+            ?.toString()
+            .trim() ??
+        '';
+    final rawEmail =
+        _contactFormCtrl.values['Email']?.toString().trim() ?? '';
+
+    final cleanPhone = _cleanPhoneNumber(rawPhone);
+    final cleanAltPhone = _cleanPhoneNumber(rawAltPhone);
+    final cleanEmail = rawEmail.toLowerCase();
+
+    final hasValidPhone = cleanPhone.length >= 8 && cleanPhone.length <= 13;
+    final hasValidAltPhone =
+        cleanAltPhone.length >= 8 && cleanAltPhone.length <= 13;
+    final hasValidEmail =
+        cleanEmail.length >= 5 &&
+        cleanEmail.contains('@') &&
+        cleanEmail.contains('.');
+
+    final currentKey = '$cleanPhone|$cleanAltPhone|$cleanEmail';
+    if (currentKey == _lastCheckedKey) {
+      return;
+    }
+    _lastCheckedKey = currentKey;
+
+    if (!hasValidPhone && !hasValidAltPhone && !hasValidEmail) {
+      if (_duplicateMatches.isNotEmpty || _isCheckingDuplicates) {
+        setState(() {
+          _lastCheckedKey = currentKey;
+          _duplicateMatches = [];
+          _isCheckingDuplicates = false;
+        });
+      } else {
+        _lastCheckedKey = currentKey;
+      }
+      return;
+    }
+
+    final requestId = ++_duplicateCheckCounter;
+    setState(() {
+      _isCheckingDuplicates = true;
+    });
+
+    debugPrint(
+      '🔍 [DuplicateCheck] Starting: phone="$cleanPhone" (raw: "$rawPhone"), alt="$cleanAltPhone", email="$cleanEmail"',
+    );
+
+    try {
+      final List<Future<QuerySnapshot>> queries = [];
+
+      List<String> getPhoneVariants(String digits, String raw) {
+        final set = <String>{};
+        if (raw.isNotEmpty) {
+          set.add(raw.trim());
+        }
+        if (digits.isNotEmpty) {
+          set.add(digits);
+          set.add('+91$digits');
+          set.add('+91 $digits');
+          set.add('91$digits');
+          set.add('0$digits');
+          if (digits.length == 10) {
+            set.add('${digits.substring(0, 5)} ${digits.substring(5)}');
+            set.add('+91 ${digits.substring(0, 5)} ${digits.substring(5)}');
+            set.add('${digits.substring(0, 5)}-${digits.substring(5)}');
+            set.add('+91-${digits.substring(0, 5)}-${digits.substring(5)}');
+          }
+        }
+        return set.take(10).toList();
+      }
+
+      if (hasValidPhone) {
+        final variants = getPhoneVariants(cleanPhone, rawPhone);
+        queries.add(
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('phone', whereIn: variants)
+              .limit(10)
+              .get(),
+        );
+        queries.add(
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('alternatePhone', whereIn: variants)
+              .limit(10)
+              .get(),
+        );
+
+        final intPhone = int.tryParse(cleanPhone);
+        if (intPhone != null) {
+          queries.add(
+            FirebaseFirestore.instance
+                .collection('listings')
+                .where('phone', isEqualTo: intPhone)
+                .limit(10)
+                .get(),
+          );
+          queries.add(
+            FirebaseFirestore.instance
+                .collection('listings')
+                .where('alternatePhone', isEqualTo: intPhone)
+                .limit(10)
+                .get(),
+          );
+        }
+      }
+
+      if (hasValidAltPhone) {
+        final variants = getPhoneVariants(cleanAltPhone, rawAltPhone);
+        queries.add(
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('phone', whereIn: variants)
+              .limit(10)
+              .get(),
+        );
+        queries.add(
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('alternatePhone', whereIn: variants)
+              .limit(10)
+              .get(),
+        );
+
+        final intAlt = int.tryParse(cleanAltPhone);
+        if (intAlt != null) {
+          queries.add(
+            FirebaseFirestore.instance
+                .collection('listings')
+                .where('phone', isEqualTo: intAlt)
+                .limit(10)
+                .get(),
+          );
+          queries.add(
+            FirebaseFirestore.instance
+                .collection('listings')
+                .where('alternatePhone', isEqualTo: intAlt)
+                .limit(10)
+                .get(),
+          );
+        }
+      }
+
+      if (hasValidEmail) {
+        final emailVariants = {cleanEmail, rawEmail.trim()}.toList();
+        queries.add(
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('email', whereIn: emailVariants)
+              .limit(10)
+              .get(),
+        );
+      }
+
+      final snapshots = await Future.wait(queries);
+
+      if (!mounted || requestId != _duplicateCheckCounter) return;
+
+      final Map<String, DuplicateListingMatch> matchMap = {};
+
+      for (var snap in snapshots) {
+        for (var doc in snap.docs) {
+          try {
+            final data = doc.data() as Map<String, dynamic>;
+            final docId = doc.id;
+
+            // If editing, exclude current listing
+            if (widget.existingListing != null &&
+                (widget.existingListing!.listingId == docId ||
+                    data['listingId'] == widget.existingListing!.listingId)) {
+              continue;
+            }
+
+            // Exclude deleted listings
+            if (data['isDeleted'] == true) {
+              continue;
+            }
+
+            // Safely read contact fields directly from data
+            final rawDocPhone =
+                (data['phone'] ?? data['phoneNumber'] ?? '').toString();
+            final rawDocAlt = (data['alternatePhone'] ?? '').toString();
+            final rawDocEmail = (data['email'] ?? '').toString();
+
+            final docCleanPhone = _cleanPhoneNumber(rawDocPhone);
+            final docCleanAlt = _cleanPhoneNumber(rawDocAlt);
+            final docEmail = rawDocEmail.trim().toLowerCase();
+
+            final matchedReasons = <String>{};
+
+            if (hasValidPhone) {
+              if (docCleanPhone == cleanPhone ||
+                  (cleanPhone.length >= 8 &&
+                      docCleanPhone.contains(cleanPhone)) ||
+                  (rawDocPhone.trim().isNotEmpty &&
+                      rawDocPhone.trim() == rawPhone)) {
+                matchedReasons.add('Phone');
+              }
+              if (docCleanAlt == cleanPhone ||
+                  (cleanPhone.length >= 8 &&
+                      docCleanAlt.contains(cleanPhone)) ||
+                  (rawDocAlt.trim().isNotEmpty &&
+                      rawDocAlt.trim() == rawPhone)) {
+                matchedReasons.add('Alternate Phone');
+              }
+            }
+
+            if (hasValidAltPhone) {
+              if (docCleanPhone == cleanAltPhone ||
+                  (cleanAltPhone.length >= 8 &&
+                      docCleanPhone.contains(cleanAltPhone)) ||
+                  (rawDocPhone.trim().isNotEmpty &&
+                      rawDocPhone.trim() == rawAltPhone)) {
+                matchedReasons.add('Phone');
+              }
+              if (docCleanAlt == cleanAltPhone ||
+                  (cleanAltPhone.length >= 8 &&
+                      docCleanAlt.contains(cleanAltPhone)) ||
+                  (rawDocAlt.trim().isNotEmpty &&
+                      rawDocAlt.trim() == rawAltPhone)) {
+                matchedReasons.add('Alternate Phone');
+              }
+            }
+
+            if (hasValidEmail &&
+                (docEmail == cleanEmail ||
+                    rawDocEmail.trim() == rawEmail.trim())) {
+              matchedReasons.add('Email');
+            }
+
+            if (matchedReasons.isNotEmpty) {
+              Listing listing;
+              try {
+                data['listingId'] = data['listingId'] ?? docId;
+                listing = Listing.fromJson(data);
+              } catch (e) {
+                debugPrint('⚠️ Listing.fromJson fallback for $docId: $e');
+                listing = _safeListingFromMap(docId, data);
+              }
+
+              if (matchMap.containsKey(docId)) {
+                for (var reason in matchedReasons) {
+                  if (!matchMap[docId]!.matchedReasons.contains(reason)) {
+                    matchMap[docId]!.matchedReasons.add(reason);
+                  }
+                }
+              } else {
+                matchMap[docId] = DuplicateListingMatch(
+                  listing: listing,
+                  matchedReasons: matchedReasons.toList(),
+                );
+              }
+            }
+          } catch (docErr) {
+            debugPrint('⚠️ Error processing duplicate doc: $docErr');
+          }
+        }
+      }
+
+      debugPrint(
+        '🔍 [DuplicateCheck] Done. Found ${matchMap.length} duplicate match(es).',
+      );
+
+      setState(() {
+        _lastCheckedKey = currentKey;
+        _duplicateMatches = matchMap.values.toList();
+        _isCheckingDuplicates = false;
+      });
+    } catch (e, stack) {
+      debugPrint('❌ Error checking duplicate listings: $e\n$stack');
+      if (mounted && requestId == _duplicateCheckCounter) {
+        setState(() {
+          _isCheckingDuplicates = false;
+        });
+      }
+    }
+  }
+
+  Listing _safeListingFromMap(String docId, Map<String, dynamic> data) {
+    return Listing(
+      listingId: data['listingId']?.toString() ?? docId,
+      contributionId: data['contributionId']?.toString() ?? '',
+      name: data['name']?.toString() ?? 'Unnamed Listing',
+      address: data['address']?.toString() ?? '',
+      description: data['description']?.toString() ?? '',
+      details: {},
+      detailsOrder: [],
+      geo: Geo(lat: 0.0, lng: 0.0),
+      phone: data['phone']?.toString() ?? '',
+      alternatePhone: data['alternatePhone']?.toString() ?? '',
+      email: data['email']?.toString() ?? '',
+      category: data['category']?.toString() ?? 'General',
+      categoryId: data['categoryId']?.toString() ?? '',
+      tags: [],
+      addedBy: data['addedBy']?.toString() ?? '',
+      updatedBy: data['updatedBy']?.toString() ?? '',
+      isClaimed: data['isClaimed'] == true,
+      ownerId: data['ownerId']?.toString() ?? '',
+      ownerName: data['ownerName']?.toString() ?? '',
+      claimStatus: data['claimStatus']?.toString() ?? 'pending',
+      isDeleted: data['isDeleted'] == true,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      images: [],
+      reviews: 0,
+      ratingCount: 0,
+      rating: 0.0,
+      since: 2025,
+      likes: 0,
+      views: 0,
+      isPremium: false,
+      social: {},
+      ratingStats: {'1': 0, '2': 0, '3': 0, '4': 0, '5': 0},
+      factorAvgRatings: {},
+      businessHours: {},
+    );
+  }
+
+  Widget _buildDuplicateListingsSection() {
+    final count = _duplicateMatches.length;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 14, bottom: 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.amber.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Header Row (compact)
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFEF3C7),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.warning_amber_rounded,
+                  color: Color(0xFFD97706),
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  "Past listings with same credentials",
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF92400E),
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2.5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFBBF24),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  "$count Found",
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: Color(0xFFFDE68A)),
+          const SizedBox(height: 10),
+
+          // 2. Listing Cards (compact white cards on yellow)
+          Column(
+            children: _duplicateMatches.map((match) {
+              final listing = match.listing;
+              final imageUrl = listing.images.isNotEmpty
+                  ? (listing.images.first.thumbUrl.isNotEmpty
+                      ? listing.images.first.thumbUrl
+                      : listing.images.first.fullUrl)
+                  : '';
+              final hasImage = imageUrl.isNotEmpty;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFDE68A), width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ListingDetailScreen(
+                            listing: listing,
+                            similarListings: const [],
+                          ),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Row(
+                        children: [
+                          // Thumbnail (48x48 compact)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: hasImage
+                                ? CachedNetworkImage(
+                                    imageUrl: imageUrl,
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => Container(
+                                      width: 48,
+                                      height: 48,
+                                      color: Colors.grey.shade100,
+                                    ),
+                                    errorWidget: (context, url, error) =>
+                                        _duplicateFallbackIcon(),
+                                  )
+                                : _duplicateFallbackIcon(),
+                          ),
+                          const SizedBox(width: 10),
+
+                          // Details
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  listing.name.isNotEmpty
+                                      ? listing.name
+                                      : "Unnamed Listing",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  listing.category.isNotEmpty
+                                      ? listing.category
+                                      : "General",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 4,
+                                  runSpacing: 3,
+                                  children: match.matchedReasons.map((reason) {
+                                    final isEmail = reason.contains('Email');
+                                    final isAlt = reason.contains('Alternate');
+
+                                    final bg = isEmail
+                                        ? const Color(0xFFF0FDF4)
+                                        : const Color(0xFFFEF3C7);
+                                    final border = isEmail
+                                        ? const Color(0xFFBBF7D0)
+                                        : const Color(0xFFF59E0B);
+                                    final textColor = isEmail
+                                        ? const Color(0xFF15803D)
+                                        : const Color(0xFF92400E);
+                                    final iconColor = isEmail
+                                        ? const Color(0xFF16A34A)
+                                        : const Color(0xFFD97706);
+                                    final icon = isEmail
+                                        ? Icons.email_rounded
+                                        : (isAlt
+                                            ? Icons.phone_callback_rounded
+                                            : Icons.phone_rounded);
+
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: bg,
+                                        borderRadius: BorderRadius.circular(5),
+                                        border: Border.all(
+                                          color: border,
+                                          width: 0.8,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            icon,
+                                            size: 10,
+                                            color: iconColor,
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            "Matched: $reason",
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              color: textColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+
+                          // View Action Pill
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Text(
+                                  "View",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
+                                SizedBox(width: 2),
+                                Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 14,
+                                  color: Color(0xFF92400E),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+
+          const SizedBox(height: 2),
+
+          // 3. Footer info note (slim)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: const Color(0xFFFDE68A).withValues(alpha: 0.6),
+                width: 0.8,
+              ),
+            ),
+            child: Row(
+              children: const [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 12,
+                  color: Color(0xFFB45309),
+                ),
+                SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    "You can still proceed with Next if this is a separate listing.",
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF92400E),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _duplicateFallbackIcon() {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: AppColors.THEME_COLOR.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppColors.THEME_COLOR.withValues(alpha: 0.15),
+          width: 0.8,
+        ),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.storefront_rounded,
+          color: AppColors.THEME_COLOR,
+          size: 22,
+        ),
       ),
     );
   }
@@ -1230,12 +2081,15 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }
 
   Widget _stepOpenHourDetails() {
+    final bool isAll24Hours = weekDays.every(
+      (day) => _businessHours[day]?.is24Hours == true,
+    );
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           _header("Open Hours"),
-          // 👉 Paste Add Open Hours Row
           Row(
             children: [
               const Expanded(
@@ -1257,8 +2111,102 @@ class _AddListingScreenState extends State<AddListingScreen> {
               ),
             ],
           ),
-          // 👉 Paste _buildOpenHoursTable()
-          _addOpenHours ? _buildOpenHoursSection() : SizedBox(),
+          if (_addOpenHours) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color:
+                    isAll24Hours
+                        ? AppColors.THEME_COLOR.withValues(alpha: 0.08)
+                        : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      isAll24Hours
+                          ? AppColors.THEME_COLOR.withValues(alpha: 0.35)
+                          : Colors.grey.shade300,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color:
+                          isAll24Hours
+                              ? AppColors.THEME_COLOR.withValues(alpha: 0.15)
+                              : Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.all_inclusive_rounded,
+                      size: 20,
+                      color:
+                          isAll24Hours
+                              ? AppColors.THEME_COLOR
+                              : Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Open 24/7 (All 7 Days)",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color:
+                                isAll24Hours
+                                    ? AppColors.THEME_COLOR
+                                    : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          "Mark business open 24 hours every day",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Transform.scale(
+                    scale: 0.85,
+                    child: Switch(
+                      value: isAll24Hours,
+                      activeTrackColor: AppColors.THEME_COLOR,
+                      activeThumbColor: Colors.white,
+                      onChanged: (val) {
+                        setState(() {
+                          for (var day in weekDays) {
+                            _businessHours[day]?.is24Hours = val;
+                            if (val) {
+                              _businessHours[day]?.isClosed = false;
+                            } else if (_businessHours[day]?.slots.isEmpty ??
+                                true) {
+                              _businessHours[day]?.slots = [
+                                TimeSlot(
+                                  open: const TimeOfDay(hour: 9, minute: 0),
+                                  close: const TimeOfDay(hour: 17, minute: 0),
+                                ),
+                              ];
+                            }
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildOpenHoursSection(),
+          ],
         ],
       ),
     );
@@ -1637,69 +2585,132 @@ class _AddListingScreenState extends State<AddListingScreen> {
       children:
           weekDays.map((day) {
             final schedule = _businessHours[day]!;
+            final bool isOpen = !schedule.isClosed && !schedule.is24Hours;
+            final bool is24 = !schedule.isClosed && schedule.is24Hours;
+            final bool isClosed = schedule.isClosed;
 
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
+              elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color:
+                      isClosed
+                          ? Colors.red.shade200
+                          : is24
+                          ? Colors.green.shade300
+                          : Colors.grey.shade300,
+                  width: (is24 || isClosed) ? 1.2 : 1.0,
+                ),
               ),
+              color:
+                  isClosed
+                      ? const Color(0xFFFFF8F8)
+                      : is24
+                      ? const Color(0xFFF6FBF8)
+                      : Colors.white,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    /// Day Header Row
+                    /// Day Header Row: Day Name + Segmented Pill Selector
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
                           day,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
+                            color:
+                                isClosed ? Colors.grey.shade700 : Colors.black87,
                           ),
                         ),
-
-                        /// Closed Toggle
-                        Row(
-                          children: [
-                            const Text("Closed"),
-                            Switch(
-                              value: schedule.isClosed,
-                              onChanged: (value) {
-                                setState(() {
-                                  schedule.isClosed = value;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
+                        _buildDayStatusPills(schedule),
                       ],
                     ),
 
-                    const SizedBox(height: 8),
-
-                    /// If Closed → Show Label Only
-                    if (schedule.isClosed)
+                    /// If Closed → Show Closed Badge
+                    if (isClosed) ...[
+                      const SizedBox(height: 12),
                       Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: const Text(
-                          "Closed Entire Day",
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade100),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.block_rounded,
+                              size: 15,
+                              color: Colors.red.shade700,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              "Closed Entire Day",
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                    ],
 
-                    /// If Not Closed → Show Slots
-                    if (!schedule.isClosed) ...[
+                    /// If 24 Hours → Show 24 Hours Badge
+                    if (is24) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.all_inclusive_rounded,
+                              size: 17,
+                              color: Colors.green.shade700,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              "Open 24 Hours",
+                              style: TextStyle(
+                                color: Colors.green.shade800,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    /// If Regular Timings → Show Slots
+                    if (isOpen) ...[
+                      const SizedBox(height: 14),
                       ...schedule.slots.asMap().entries.map((entry) {
                         final index = entry.key;
                         final slot = entry.value;
 
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.only(bottom: 10),
                           child: Row(
                             children: [
                               Expanded(
@@ -1722,9 +2733,19 @@ class _AddListingScreenState extends State<AddListingScreen> {
                                   },
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              const Text("to"),
-                              const SizedBox(width: 8),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                                child: Text(
+                                  "to",
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
                               Expanded(
                                 child: _timePickerButton(
                                   context,
@@ -1745,27 +2766,35 @@ class _AddListingScreenState extends State<AddListingScreen> {
                                   },
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.close,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    if (schedule.slots.length > 1) {
+                              if (schedule.slots.length > 1) ...[
+                                const SizedBox(width: 6),
+                                InkWell(
+                                  onTap: () {
+                                    setState(() {
                                       schedule.slots.removeAt(index);
-                                    }
-                                  });
-                                },
-                              ),
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(7),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.close_rounded,
+                                      size: 16,
+                                      color: Colors.red.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         );
                       }),
-
-                      /// Add Slot Button
-                      TextButton.icon(
-                        onPressed: () {
+                      InkWell(
+                        onTap: () {
                           setState(() {
                             schedule.slots.add(
                               TimeSlot(
@@ -1775,8 +2804,32 @@ class _AddListingScreenState extends State<AddListingScreen> {
                             );
                           });
                         },
-                        icon: const Icon(Icons.add),
-                        label: const Text("Add Time Slot"),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 2,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.add_circle_outline_rounded,
+                                size: 16,
+                                color: AppColors.THEME_COLOR,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                "Add Time Slot",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.THEME_COLOR,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -1787,6 +2840,131 @@ class _AddListingScreenState extends State<AddListingScreen> {
     );
   }
 
+  Widget _buildDayStatusPills(DaySchedule schedule) {
+    final int selectedIndex =
+        schedule.isClosed
+            ? 2
+            : schedule.is24Hours
+            ? 1
+            : 0;
+
+    final Alignment alignment =
+        selectedIndex == 0
+            ? const Alignment(-1.0, 0.0)
+            : selectedIndex == 1
+            ? const Alignment(0.0, 0.0)
+            : const Alignment(1.0, 0.0);
+
+    final Color thumbColor =
+        selectedIndex == 0
+            ? AppColors.THEME_COLOR
+            : selectedIndex == 1
+            ? const Color(0xFF1B8755)
+            : const Color(0xFFD32F2F);
+
+    return Container(
+      width: 176,
+      height: 33,
+      padding: const EdgeInsets.all(2.5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F2F4),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Stack(
+        children: [
+          // 1. Sliding colored thumb indicator
+          AnimatedAlign(
+            alignment: alignment,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeInOutCubic,
+            child: FractionallySizedBox(
+              widthFactor: 1 / 3,
+              heightFactor: 1.0,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeInOutCubic,
+                decoration: BoxDecoration(
+                  color: thumbColor,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+
+          // 2. Interactive text tabs
+          Row(
+            children: [
+              _buildSlidingTabItem(
+                label: "Open",
+                isSelected: selectedIndex == 0,
+                onTap: () {
+                  setState(() {
+                    schedule.isClosed = false;
+                    schedule.is24Hours = false;
+                    if (schedule.slots.isEmpty) {
+                      schedule.slots.add(
+                        TimeSlot(
+                          open: const TimeOfDay(hour: 9, minute: 0),
+                          close: const TimeOfDay(hour: 17, minute: 0),
+                        ),
+                      );
+                    }
+                  });
+                },
+              ),
+              _buildSlidingTabItem(
+                label: "24 Hrs",
+                isSelected: selectedIndex == 1,
+                onTap: () {
+                  setState(() {
+                    schedule.is24Hours = true;
+                    schedule.isClosed = false;
+                  });
+                },
+              ),
+              _buildSlidingTabItem(
+                label: "Closed",
+                isSelected: selectedIndex == 2,
+                onTap: () {
+                  setState(() {
+                    schedule.isClosed = true;
+                    schedule.is24Hours = false;
+                  });
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSlidingTabItem({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Center(
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeInOutCubic,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              color: isSelected ? Colors.white : const Color(0xFF555555),
+            ),
+            child: Text(label),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _timePickerButton(
     BuildContext context, {
     required String label,
@@ -1794,13 +2972,33 @@ class _AddListingScreenState extends State<AddListingScreen> {
   }) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade400),
-          borderRadius: BorderRadius.circular(8),
+          color: Colors.grey.shade50,
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(10),
         ),
-        child: Center(child: Text(label, style: const TextStyle(fontSize: 15))),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.access_time_rounded,
+              size: 16,
+              color: AppColors.THEME_COLOR,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1809,11 +3007,13 @@ class _AddListingScreenState extends State<AddListingScreen> {
 class DynamicCategoryForm extends StatefulWidget {
   final List<CategoryField> schema;
   final DynamicFormController controller;
+  final void Function(String label, dynamic value)? onFieldChanged;
 
   const DynamicCategoryForm({
     super.key,
     required this.schema,
     required this.controller,
+    this.onFieldChanged,
   });
 
   @override
@@ -2006,6 +3206,7 @@ class _DynamicCategoryFormState extends State<DynamicCategoryForm> {
         ),
         onChanged: (value) {
           widget.controller.values[field.label] = value;
+          widget.onFieldChanged?.call(field.label, value);
         },
       ),
     );

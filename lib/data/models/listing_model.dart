@@ -300,17 +300,23 @@ class TimeSlot {
 
 class DaySchedule {
   bool isClosed;
+  bool is24Hours;
   List<TimeSlot> slots;
 
-  DaySchedule({required this.isClosed, required this.slots});
+  DaySchedule({
+    required this.isClosed,
+    this.is24Hours = false,
+    required this.slots,
+  });
 
   factory DaySchedule.fromJson(Map<String, dynamic>? json) {
     if (json == null) {
-      return DaySchedule(isClosed: true, slots: []);
+      return DaySchedule(isClosed: true, is24Hours: false, slots: []);
     }
 
     return DaySchedule(
       isClosed: json['isClosed'] ?? false,
+      is24Hours: json['is24Hours'] ?? false,
       slots:
           (json['slots'] as List<dynamic>? ?? [])
               .map((e) => TimeSlot.fromJson(Map<String, dynamic>.from(e)))
@@ -321,6 +327,7 @@ class DaySchedule {
   Map<String, dynamic> toJson() {
     return {
       "isClosed": isClosed,
+      "is24Hours": is24Hours,
       "slots": slots.map((e) => e.toJson()).toList(),
     };
   }
