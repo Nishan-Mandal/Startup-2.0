@@ -200,7 +200,13 @@ class _ListingPageState extends State<ListingPage> {
     final now = DateTime.now();
     final currentDay = days[now.weekday - 1];
     final schedule = listing.businessHours[currentDay];
-    if (schedule == null || schedule.isClosed || schedule.slots.isEmpty) {
+    if (schedule == null || schedule.isClosed) {
+      return false;
+    }
+    if (schedule.is24Hours) {
+      return true;
+    }
+    if (schedule.slots.isEmpty) {
       return false;
     }
     final nowTime = TimeOfDay.fromDateTime(now);
@@ -208,8 +214,15 @@ class _ListingPageState extends State<ListingPage> {
     for (final slot in schedule.slots) {
       final openMinutes = slot.open.hour * 60 + slot.open.minute;
       final closeMinutes = slot.close.hour * 60 + slot.close.minute;
-      if (currentMinutes >= openMinutes && currentMinutes <= closeMinutes) {
-        return true;
+      if (openMinutes <= closeMinutes) {
+        if (currentMinutes >= openMinutes && currentMinutes <= closeMinutes) {
+          return true;
+        }
+      } else {
+        // Over midnight (e.g. 8 PM to 2 AM)
+        if (currentMinutes >= openMinutes || currentMinutes <= closeMinutes) {
+          return true;
+        }
       }
     }
     return false;
