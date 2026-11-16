@@ -202,16 +202,23 @@ class NotificationService {
 
     String? route;
     String? listingId;
+    String? conversationId;
 
     if (decoded is Map<String, dynamic>) {
       route = decoded['route'];
       listingId = decoded['listingId'];
+      conversationId = decoded['conversationId'];
     } else if (decoded is String) {
       route = decoded;
     }
 
     if (route == '/listing' && listingId != null) {
       navigatorKey.currentState?.pushNamed('/listing/$listingId');
+    } else if (route == '/chatRoom' && conversationId != null) {
+      navigatorKey.currentState?.pushNamed(
+        '/chatRoom',
+        arguments: {'conversationId': conversationId},
+      );
     } else if (route == '/chatScreen') {
       navigatorKey.currentState?.pushNamed('/chatScreen');
     } else if (route == '/notifications') {

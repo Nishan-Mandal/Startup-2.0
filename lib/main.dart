@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/core/services/notification_service.dart';
 import 'package:startup_20/data/models/listing_model.dart';
+import 'package:startup_20/presentation/screens/conversation/chat_room_screen.dart';
 import 'package:startup_20/presentation/screens/home_screen.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
@@ -62,6 +63,40 @@ class MyApp extends StatelessWidget {
       },
 
       onGenerateRoute: (settings) {
+        if (settings.name == '/chatRoom') {
+          final args = settings.arguments as Map<String, dynamic>?;
+          final conversationId = args?['conversationId'];
+          if (conversationId != null) {
+            return MaterialPageRoute(
+              builder:
+                  (context) => FutureBuilder<DocumentSnapshot>(
+                    future:
+                        FirebaseFirestore.instance
+                            .collection('conversations')
+                            .doc(conversationId)
+                            .get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Scaffold(
+                          body: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      final data =
+                          snapshot.data?.data() as Map<String, dynamic>?;
+                      final type = data?['type'] ?? 'group';
+                      final title = data?['groupName'] ?? 'Chat';
+                      return ChatRoomScreen(
+                        conversationId: conversationId,
+                        otherUserId: '',
+                        type: type,
+                        title: title,
+                      );
+                    },
+                  ),
+            );
+          }
+        }
+
         final uri = Uri.parse(settings.name ?? '');
         if (uri.pathSegments.isNotEmpty &&
             uri.pathSegments.length == 2 &&
