@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +9,7 @@ import 'package:startup_20/data/models/message_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
 import 'package:startup_20/providers/auth_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ChatRoomScreen extends StatefulWidget {
   final String conversationId;
@@ -314,16 +316,23 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 
-  Widget _buildMessageBubble(m, isMe) {
+  Widget _buildMessageBubble(ChatMessage m, bool isMe) {
     final appUser = context.read<AppAuthProvider>().appUser;
     // ---------------------- LISTING ATTACHMENT ----------------------
     if (m.attachments != null &&
-        m.attachments.length > 0 &&
+        m.attachments!.isNotEmpty &&
         m.attachments!["type"] == "listing") {
       final listingData = m.attachments!["data"];
       final listing = Listing.fromJson(Map<String, dynamic>.from(listingData));
 
       return _buildListingAttachmentBubble(listing, isMe, m);
+    }
+    // ---------------------- BLOG ATTACHMENT ----------------------
+    if (m.attachments != null &&
+        m.attachments!.isNotEmpty &&
+        m.attachments!["type"] == "blog") {
+      final blogData = Map<String, dynamic>.from(m.attachments!["data"] ?? {});
+      return _buildBlogAttachmentBubble(blogData, isMe, m);
     }
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -343,7 +352,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               child: Text(
                 widget.type == 'support' && appUser?.role != 'admin'
                     ? 'S'
-                    : CommonMethods.getInitials(m.senderName ?? 'U'),
+                    : CommonMethods.getInitials(
+                        m.senderName.isNotEmpty ? m.senderName : 'U',
+                      ),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -513,5 +524,242 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildBlogAttachmentBubble(
+    Map<String, dynamic> blogData,
+    bool isMe,
+    m,
+  ) {
+    final title = (blogData['title'] ?? '').toString();
+    final rawDesc = (blogData['description'] ?? '').toString();
+    final cleanDescription = rawDesc.replaceAll(RegExp(r'^[#*\s]+'), '').trim();
+    final heroImageUrl = (blogData['heroImageUrl'] ?? '').toString();
+    final articleUrl = (blogData['articleUrl'] ?? m.text ?? '').toString();
+    final domain = (blogData['domain'] ?? 'needmet.in').toString();
+
+    final maxWidth = MediaQuery.of(context).size.width * 0.76;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: Row(
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Avatar on the left for incoming messages (aligned at top)
+          if (!isMe)
+            CircleAvatar(
+              maxRadius: 15,
+              backgroundColor: AppColors.THEME_COLOR.withValues(alpha: 0.15),
+              child: const Icon(
+                Icons.newspaper_rounded,
+                size: 16,
+                color: AppColors.THEME_COLOR,
+              ),
+            ),
+          if (!isMe) const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                // Sender name in group chat
+                if (!isMe && widget.type == 'group')
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2, bottom: 4),
+                    child: Text(
+                      m.senderName != null &&
+                              m.senderName.toString().isNotEmpty
+                          ? m.senderName.toString()
+                          : 'NeedMet Blogs',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.THEME_COLOR,
+                      ),
+                    ),
+                  ),
+
+                // Native Card Bubble
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => _openUrl(articleUrl),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.WHITE,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: AppColors.GREY_SHADE_300,
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.BLACK_12,
+                            blurRadius: 4,
+                            offset: const Offset(0, 1.5),
+                          ),
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 1. Hero Image
+                          if (heroImageUrl.isNotEmpty)
+                            CachedNetworkImage(
+                              imageUrl: heroImageUrl,
+                              height: 145,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                height: 145,
+                                color: AppColors.GREY_SHADE_100,
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.THEME_COLOR,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                height: 145,
+                                color: AppColors.GREY_SHADE_100,
+                                child: const Icon(
+                                  Icons.article_outlined,
+                                  color: AppColors.GREY,
+                                  size: 40,
+                                ),
+                              ),
+                            ),
+
+                          // 2. Title, Description & Domain
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (title.isNotEmpty)
+                                  Text(
+                                    title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.BLACK,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                if (cleanDescription.isNotEmpty) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    cleanDescription,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.BLACK_54,
+                                      fontSize: 11.5,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 5),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.language_rounded,
+                                      size: 12,
+                                      color: AppColors.GREY,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      domain,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.GREY,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // 3. Link Footer (App Theme Color background, White text)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            decoration: const BoxDecoration(
+                              color: AppColors.THEME_COLOR,
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    articleUrl,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.WHITE,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w500,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: AppColors.WHITE,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.open_in_new_rounded,
+                                  size: 13,
+                                  color: AppColors.WHITE,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // 4. Timestamp below bubble (matching existing messages)
+                const SizedBox(height: 3),
+                Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: Text(
+                    CommonMethods.formatMessageTime(m.createdAt),
+                    style: const TextStyle(fontSize: 10, color: AppColors.GREY),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openUrl(String url) async {
+    if (url.trim().isEmpty) return;
+    try {
+      final uri = Uri.parse(url.trim());
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        await launchUrl(uri);
+      }
+    } catch (e) {
+      debugPrint("Error opening URL: $e");
+    }
   }
 }

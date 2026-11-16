@@ -55,6 +55,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   bool _isLiked = false;
   int _likes = 0;
   AppUser? listingUser;
+  bool _isCheckingDuplicates = false;
+  bool _hasCheckedDuplicates = false;
+  List<DuplicateListingMatch> _duplicateMatches = [];
 
   static const List<String> weekDays = [
     "Monday",
@@ -77,6 +80,22 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       _getListingOwner();
       _checkIfFavorite();
       _checkIfLiked();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasCheckedDuplicates && !widget.isPreview) {
+      final appUser = Provider.of<AppAuthProvider>(context).appUser;
+      if (appUser != null) {
+        _hasCheckedDuplicates = true;
+        final isPending = currentListing.verifiedBy == null ||
+            currentListing.verifiedBy!.isEmpty;
+        if (appUser.role == 'admin' && isPending) {
+          _checkDuplicateListings();
+        }
+      }
     }
   }
 
@@ -1345,9 +1364,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.AMBER.withOpacity(0.08),
+          color: AppColors.AMBER.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.AMBER.withOpacity(0.3)),
+          border: Border.all(color: AppColors.AMBER.withValues(alpha: 0.3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1360,12 +1379,19 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
             Row(
               children: [
-                const Icon(
-                  Icons.person_outline,
-                  size: 18,
-                  color: AppColors.GREY,
+                Container(
+                  padding: const EdgeInsets.all(4.5),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEF3C7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_outline,
+                    size: 15,
+                    color: Color(0xFFD97706),
+                  ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     "Updated By: ${listing.updatedBy}",
@@ -1375,12 +1401,23 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               ],
             ),
 
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
 
             Row(
               children: [
-                const Icon(Icons.access_time, size: 18, color: AppColors.GREY),
-                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.all(4.5),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEF3C7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.access_time,
+                    size: 15,
+                    color: Color(0xFFD97706),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     "Updated On: ${_formatDate(listing.updatedAt)}",
@@ -1399,6 +1436,650 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     if (date == null) return '-';
 
     return DateFormat('dd/MM/yyyy hh:mm a').format(date);
+  }
+
+  String _cleanPhoneNumber(String input) {
+    String digits = input.replaceAll(RegExp(r'\D'), '');
+    while (digits.startsWith('0') && digits.length > 10) {
+      digits = digits.substring(1);
+    }
+    if (digits.startsWith('91') && digits.length > 10) {
+      digits = digits.substring(2);
+    }
+    while (digits.startsWith('0') && digits.length > 10) {
+      digits = digits.substring(1);
+    }
+    return digits;
+  }
+
+  Future<void> _checkDuplicateListings() async {
+    final isPending = currentListing.verifiedBy == null ||
+        currentListing.verifiedBy!.isEmpty;
+    if (!isPending) return;
+
+    final rawPhone = currentListing.phone.trim();
+    final rawAltPhone = currentListing.alternatePhone.trim();
+    final rawEmail = currentListing.email.trim();
+
+    final cleanPhone = _cleanPhoneNumber(rawPhone);
+    final cleanAltPhone = _cleanPhoneNumber(rawAltPhone);
+    final cleanEmail = rawEmail.toLowerCase();
+
+    final hasValidPhone = cleanPhone.length >= 8 && cleanPhone.length <= 13;
+    final hasValidAltPhone =
+        cleanAltPhone.length >= 8 && cleanAltPhone.length <= 13;
+    final hasValidEmail =
+        cleanEmail.length >= 5 &&
+        cleanEmail.contains('@') &&
+        cleanEmail.contains('.');
+
+    if (!hasValidPhone && !hasValidAltPhone && !hasValidEmail) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isCheckingDuplicates = true;
+      });
+    }
+
+    try {
+      final List<Future<QuerySnapshot>> queries = [];
+
+      List<String> getPhoneVariants(String digits, String raw) {
+        final set = <String>{};
+        if (raw.isNotEmpty) {
+          set.add(raw.trim());
+        }
+        if (digits.isNotEmpty) {
+          set.add(digits);
+          set.add('+91$digits');
+          set.add('+91 $digits');
+          set.add('91$digits');
+          set.add('0$digits');
+          if (digits.length == 10) {
+            set.add('${digits.substring(0, 5)} ${digits.substring(5)}');
+            set.add('+91 ${digits.substring(0, 5)} ${digits.substring(5)}');
+            set.add('${digits.substring(0, 5)}-${digits.substring(5)}');
+            set.add('+91-${digits.substring(0, 5)}-${digits.substring(5)}');
+          }
+        }
+        return set.take(10).toList();
+      }
+
+      if (hasValidPhone) {
+        final variants = getPhoneVariants(cleanPhone, rawPhone);
+        queries.add(
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('phone', whereIn: variants)
+              .limit(10)
+              .get(),
+        );
+        queries.add(
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('alternatePhone', whereIn: variants)
+              .limit(10)
+              .get(),
+        );
+
+        final intPhone = int.tryParse(cleanPhone);
+        if (intPhone != null) {
+          queries.add(
+            FirebaseFirestore.instance
+                .collection('listings')
+                .where('phone', isEqualTo: intPhone)
+                .limit(10)
+                .get(),
+          );
+          queries.add(
+            FirebaseFirestore.instance
+                .collection('listings')
+                .where('alternatePhone', isEqualTo: intPhone)
+                .limit(10)
+                .get(),
+          );
+        }
+      }
+
+      if (hasValidAltPhone) {
+        final variants = getPhoneVariants(cleanAltPhone, rawAltPhone);
+        queries.add(
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('phone', whereIn: variants)
+              .limit(10)
+              .get(),
+        );
+        queries.add(
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('alternatePhone', whereIn: variants)
+              .limit(10)
+              .get(),
+        );
+
+        final intAlt = int.tryParse(cleanAltPhone);
+        if (intAlt != null) {
+          queries.add(
+            FirebaseFirestore.instance
+                .collection('listings')
+                .where('phone', isEqualTo: intAlt)
+                .limit(10)
+                .get(),
+          );
+          queries.add(
+            FirebaseFirestore.instance
+                .collection('listings')
+                .where('alternatePhone', isEqualTo: intAlt)
+                .limit(10)
+                .get(),
+          );
+        }
+      }
+
+      if (hasValidEmail) {
+        final emailVariants = {cleanEmail, rawEmail.trim()}.toList();
+        queries.add(
+          FirebaseFirestore.instance
+              .collection('listings')
+              .where('email', whereIn: emailVariants)
+              .limit(10)
+              .get(),
+        );
+      }
+
+      final snapshots = await Future.wait(queries);
+
+      if (!mounted) return;
+
+      final Map<String, DuplicateListingMatch> matchMap = {};
+
+      for (var snap in snapshots) {
+        for (var doc in snap.docs) {
+          try {
+            final data = doc.data() as Map<String, dynamic>;
+            final docId = doc.id;
+
+            // Exclude current listing being viewed
+            if (currentListing.listingId == docId ||
+                data['listingId'] == currentListing.listingId) {
+              continue;
+            }
+
+            // Exclude deleted listings
+            if (data['isDeleted'] == true) {
+              continue;
+            }
+
+            // Safely read contact fields directly from data
+            final rawDocPhone =
+                (data['phone'] ?? data['phoneNumber'] ?? '').toString();
+            final rawDocAlt = (data['alternatePhone'] ?? '').toString();
+            final rawDocEmail = (data['email'] ?? '').toString();
+
+            final docCleanPhone = _cleanPhoneNumber(rawDocPhone);
+            final docCleanAlt = _cleanPhoneNumber(rawDocAlt);
+            final docEmail = rawDocEmail.trim().toLowerCase();
+
+            final matchedReasons = <String>{};
+
+            if (hasValidPhone) {
+              if (docCleanPhone == cleanPhone ||
+                  (cleanPhone.length >= 8 &&
+                      docCleanPhone.contains(cleanPhone)) ||
+                  (rawDocPhone.trim().isNotEmpty &&
+                      rawDocPhone.trim() == rawPhone)) {
+                matchedReasons.add('Phone');
+              }
+              if (docCleanAlt == cleanPhone ||
+                  (cleanPhone.length >= 8 &&
+                      docCleanAlt.contains(cleanPhone)) ||
+                  (rawDocAlt.trim().isNotEmpty &&
+                      rawDocAlt.trim() == rawPhone)) {
+                matchedReasons.add('Alternate Phone');
+              }
+            }
+
+            if (hasValidAltPhone) {
+              if (docCleanPhone == cleanAltPhone ||
+                  (cleanAltPhone.length >= 8 &&
+                      docCleanPhone.contains(cleanAltPhone)) ||
+                  (rawDocPhone.trim().isNotEmpty &&
+                      rawDocPhone.trim() == rawAltPhone)) {
+                matchedReasons.add('Phone');
+              }
+              if (docCleanAlt == cleanAltPhone ||
+                  (cleanAltPhone.length >= 8 &&
+                      docCleanAlt.contains(cleanAltPhone)) ||
+                  (rawDocAlt.trim().isNotEmpty &&
+                      rawDocAlt.trim() == rawAltPhone)) {
+                matchedReasons.add('Alternate Phone');
+              }
+            }
+
+            if (hasValidEmail &&
+                (docEmail == cleanEmail ||
+                    rawDocEmail.trim() == rawEmail.trim())) {
+              matchedReasons.add('Email');
+            }
+
+            if (matchedReasons.isNotEmpty) {
+              Listing listing;
+              try {
+                data['listingId'] = data['listingId'] ?? docId;
+                listing = Listing.fromJson(data);
+              } catch (e) {
+                debugPrint('⚠️ Listing.fromJson fallback for $docId: $e');
+                listing = _safeListingFromMap(docId, data);
+              }
+
+              if (matchMap.containsKey(docId)) {
+                for (var reason in matchedReasons) {
+                  if (!matchMap[docId]!.matchedReasons.contains(reason)) {
+                    matchMap[docId]!.matchedReasons.add(reason);
+                  }
+                }
+              } else {
+                matchMap[docId] = DuplicateListingMatch(
+                  listing: listing,
+                  matchedReasons: matchedReasons.toList(),
+                );
+              }
+            }
+          } catch (docErr) {
+            debugPrint('⚠️ Error processing duplicate doc: $docErr');
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _duplicateMatches = matchMap.values.toList();
+          _isCheckingDuplicates = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Error checking duplicate listings: $e');
+      if (mounted) {
+        setState(() {
+          _isCheckingDuplicates = false;
+        });
+      }
+    }
+  }
+
+  Listing _safeListingFromMap(String docId, Map<String, dynamic> data) {
+    return Listing(
+      listingId: data['listingId']?.toString() ?? docId,
+      contributionId: data['contributionId']?.toString() ?? '',
+      name: data['name']?.toString() ?? 'Unnamed Listing',
+      address: data['address']?.toString() ?? '',
+      description: data['description']?.toString() ?? '',
+      details: {},
+      detailsOrder: [],
+      geo: Geo(lat: 0.0, lng: 0.0),
+      phone: data['phone']?.toString() ?? '',
+      alternatePhone: data['alternatePhone']?.toString() ?? '',
+      email: data['email']?.toString() ?? '',
+      category: data['category']?.toString() ?? 'General',
+      categoryId: data['categoryId']?.toString() ?? '',
+      tags: [],
+      addedBy: data['addedBy']?.toString() ?? '',
+      updatedBy: data['updatedBy']?.toString() ?? '',
+      isClaimed: data['isClaimed'] == true,
+      ownerId: data['ownerId']?.toString() ?? '',
+      ownerName: data['ownerName']?.toString() ?? '',
+      claimStatus: data['claimStatus']?.toString() ?? 'pending',
+      isDeleted: data['isDeleted'] == true,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      images: [],
+      reviews: 0,
+      ratingCount: 0,
+      rating: 0.0,
+      since: 2025,
+      likes: 0,
+      views: 0,
+      isPremium: false,
+      social: {},
+      ratingStats: {'1': 0, '2': 0, '3': 0, '4': 0, '5': 0},
+      factorAvgRatings: {},
+      businessHours: {},
+    );
+  }
+
+  Widget _buildDuplicateListingsSection() {
+    final count = _duplicateMatches.length;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.AMBER.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.AMBER.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Header Row (compact)
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEF3C7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Color(0xFFD97706),
+                    size: 16,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    "Past listings with same credentials",
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF92400E),
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFBBF24),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    "$count Found",
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+            const Divider(height: 1, color: Color(0xFFFDE68A)),
+            const SizedBox(height: 10),
+
+            // 2. Listing Cards (compact white cards on yellow)
+            Column(
+              children: _duplicateMatches.map((match) {
+                final listing = match.listing;
+                final imageUrl = listing.images.isNotEmpty
+                    ? (listing.images.first.thumbUrl.isNotEmpty
+                        ? listing.images.first.thumbUrl
+                        : listing.images.first.fullUrl)
+                    : '';
+                final hasImage = imageUrl.isNotEmpty;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFDE68A), width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ListingDetailScreen(
+                              listing: listing,
+                              similarListings: const [],
+                            ),
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Row(
+                          children: [
+                            // Thumbnail (48x48 compact)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: hasImage
+                                  ? CachedNetworkImage(
+                                      imageUrl: imageUrl,
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                      placeholder: (context, url) => Container(
+                                        width: 48,
+                                        height: 48,
+                                        color: Colors.grey.shade100,
+                                      ),
+                                      errorWidget: (context, url, error) =>
+                                          _duplicateFallbackIcon(),
+                                    )
+                                  : _duplicateFallbackIcon(),
+                            ),
+                            const SizedBox(width: 10),
+
+                            // Details
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    listing.name.isNotEmpty
+                                        ? listing.name
+                                        : "Unnamed Listing",
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    listing.category.isNotEmpty
+                                        ? listing.category
+                                        : "General",
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Wrap(
+                                    spacing: 4,
+                                    runSpacing: 3,
+                                    children: match.matchedReasons.map((reason) {
+                                      final isEmail = reason.contains('Email');
+                                      final isAlt =
+                                          reason.contains('Alternate');
+
+                                      final bg = isEmail
+                                          ? const Color(0xFFF0FDF4)
+                                          : const Color(0xFFFEF3C7);
+                                      final border = isEmail
+                                          ? const Color(0xFFBBF7D0)
+                                          : const Color(0xFFF59E0B);
+                                      final textColor = isEmail
+                                          ? const Color(0xFF15803D)
+                                          : const Color(0xFF92400E);
+                                      final iconColor = isEmail
+                                          ? const Color(0xFF16A34A)
+                                          : const Color(0xFFD97706);
+                                      final icon = isEmail
+                                          ? Icons.email_rounded
+                                          : (isAlt
+                                              ? Icons.phone_callback_rounded
+                                              : Icons.phone_rounded);
+
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: bg,
+                                          borderRadius:
+                                              BorderRadius.circular(5),
+                                          border: Border.all(
+                                            color: border,
+                                            width: 0.8,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              icon,
+                                              size: 10,
+                                              color: iconColor,
+                                            ),
+                                            const SizedBox(width: 3),
+                                            Text(
+                                              "Matched: $reason",
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: textColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+
+                            // View Action Pill
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Text(
+                                    "View",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF92400E),
+                                    ),
+                                  ),
+                                  SizedBox(width: 2),
+                                  Icon(
+                                    Icons.chevron_right_rounded,
+                                    size: 14,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: 2),
+
+            // 3. Footer info note (slim)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: const Color(0xFFFDE68A).withValues(alpha: 0.6),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                children: const [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 12,
+                    color: Color(0xFFB45309),
+                  ),
+                  SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      "Review matched listings before approving to avoid duplicates.",
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF92400E),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _duplicateFallbackIcon() {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: AppColors.THEME_COLOR.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppColors.THEME_COLOR.withValues(alpha: 0.15),
+          width: 0.8,
+        ),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.storefront_rounded,
+          color: AppColors.THEME_COLOR,
+          size: 22,
+        ),
+      ),
+    );
   }
 
   Widget buildRatingsOverview(Listing listing) {
@@ -2798,6 +3479,45 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
                 if (appUser?.role == 'admin' && listing.updatedBy.isNotEmpty)
                   _buildPendingChangesSection(listing),
+
+                if (appUser?.role == 'admin' &&
+                    (currentListing.verifiedBy == null ||
+                        currentListing.verifiedBy!.isEmpty) &&
+                    _isCheckingDuplicates)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.THEME_COLOR,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          "Checking for duplicate listings...",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.GREY,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                if (appUser?.role == 'admin' &&
+                    (currentListing.verifiedBy == null ||
+                        currentListing.verifiedBy!.isEmpty) &&
+                    _duplicateMatches.isNotEmpty)
+                  _buildDuplicateListingsSection(),
 
                 buildRatingsOverview(currentListing),
 
