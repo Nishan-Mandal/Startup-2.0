@@ -24,6 +24,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:startup_20/core/services/listing_deletion_service.dart';
+import 'package:startup_20/core/services/analytics_tracker.dart';
 
 class ListingDetailScreen extends StatefulWidget {
   final Listing listing;
@@ -80,6 +81,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       _getListingOwner();
       _checkIfFavorite();
       _checkIfLiked();
+      // Web ke view_item telemetry ki tarah listing view GA4 ko dispatch kar rahe hain
+      AnalyticsTracker.trackListingView(
+        currentListing,
+        isPreview: widget.isPreview,
+      );
     }
   }
 
@@ -230,11 +236,22 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         .toList();
   }
 
+  void _trackLead(String type, {String? targetValue}) {
+    if (widget.isPreview) return;
+    AnalyticsTracker.trackOutboundAction(
+      listing: currentListing,
+      actionType: type,
+      targetValue: targetValue,
+      isPreview: widget.isPreview,
+    );
+  }
+
   void _launchCaller(String phoneNumber) async {
     if (AppAuthProvider.isAnonymousUser()) {
       CommonMethods.navigateToSignInScreen(context);
       return;
     }
+    _trackLead('calls');
     final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
     try {
       bool launched = await launchUrl(
@@ -320,51 +337,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     }
   }
 
-  // Future<Map<String, dynamic>> _uploadImage(File file, String listingId) async {
-  //   final storageRef = FirebaseStorage.instance.ref();
-  //   final fileId = const Uuid().v4();
-
-  //   // Full image compress
-  //   final Uint8List? fullData = await _compressImage(
-  //     file,
-  //     targetSize: 1280,
-  //     quality: 75,
-  //   );
-
-  //   // Thumbnail compress
-  //   final Uint8List? thumbData = await _compressImage(
-  //     file,
-  //     targetSize: 200,
-  //     quality: 50,
-  //   );
-
-  //   // Upload full
-  //   final fullRef = storageRef.child("listings/$listingId/full_$fileId.webp");
-  //   await fullRef.putData(
-  //     fullData!,
-  //     SettableMetadata(contentType: "image/webp"),
-  //   );
-  //   final fullUrl = await fullRef.getDownloadURL();
-
-  //   // Upload thumbnail
-  //   final thumbRef = storageRef.child("listings/$listingId/thumb_$fileId.webp");
-  //   await thumbRef.putData(
-  //     thumbData!,
-  //     SettableMetadata(contentType: "image/webp"),
-  //   );
-  //   final thumbUrl = await thumbRef.getDownloadURL();
-
-  //   return {"fileId": fileId, "fullUrl": fullUrl, "thumbUrl": thumbUrl};
-  // }
-
-  // Future<List<Map<String, dynamic>>> _uploadImages(
-  //   String listingId,
-  //   List<File> files,
-  // ) async {
-  //   return await Future.wait(
-  //     files.map((file) => _uploadImage(file, listingId)),
-  //   );
-  // }
 
   final Map<String, int> _bytesTransferred = {};
   int _totalBytes = 0;
@@ -477,17 +449,49 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         currentListing.localImages ?? [],
       );
 
-      //merge old + new images
-      final finalImages = [
-        ...currentListing.images,
-        ...uploadedNewImages.map(
-          (img) => ImageFile(
-            fileId: img["fileId"],
-            fullUrl: img["fullUrl"],
-            thumbUrl: img["thumbUrl"],
-          ),
-        ),
-      ];
+      // Uploaded images ko local file paths se map kar rahe hain
+      final localFiles = currentListing.localImages ?? [];
+      final uploadedMap = <String, ImageFile>{};
+      for (int i = 0; i < localFiles.length && i < uploadedNewImages.length; i++) {
+        final img = uploadedNewImages[i];
+        uploadedMap[localFiles[i].path] = ImageFile(
+          fileId: img["fileId"],
+          fullUrl: img["fullUrl"],
+          thumbUrl: img["thumbUrl"],
+        );
+      }
+
+      final remoteMap = {
+        for (var r in currentListing.images)
+          (r.fileId.isNotEmpty ? r.fileId : r.thumbUrl): r
+      };
+
+      // User ke set kiye hue exact sequence me final images list rebuild kar rahe hain
+      List<ImageFile> finalImages = [];
+      if (currentListing.imageOrder != null &&
+          currentListing.imageOrder!.isNotEmpty) {
+        for (final key in currentListing.imageOrder!) {
+          if (key.startsWith('remote:')) {
+            final id = key.substring(7);
+            if (remoteMap.containsKey(id)) finalImages.add(remoteMap[id]!);
+          } else if (key.startsWith('local:')) {
+            final path = key.substring(6);
+            if (uploadedMap.containsKey(path)) finalImages.add(uploadedMap[path]!);
+          }
+        }
+        // Safety check: agar koi image reh gayi ho toh append ho jaye
+        for (final r in currentListing.images) {
+          if (!finalImages.contains(r)) finalImages.add(r);
+        }
+        for (final u in uploadedMap.values) {
+          if (!finalImages.contains(u)) finalImages.add(u);
+        }
+      } else {
+        finalImages = [
+          ...currentListing.images,
+          ...uploadedMap.values,
+        ];
+      }
       // ⭐ MODIFIED — create Listing model
       final listing = Listing(
         listingId: listingId,
@@ -583,6 +587,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   void _shareListing() {
+    _trackLead('shares');
     final shareUrl = "https://needmet.in/listing/${currentListing.listingId}";
     SharePlus.instance.share(
       ShareParams(text: 'Check out this listing on NeedMet:\n$shareUrl'),
@@ -848,11 +853,37 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   Widget _buildImageCarousel(Listing listing) {
     final isPreview = widget.isPreview;
 
-    // 🔥 Merge local + remote images
-    final List<dynamic> combinedImages = [
-      ...listing.images, // remote ImageFile models
-      ...(isPreview ? (listing.localImages ?? []) : []), // local File objects
-    ];
+    // 🔥 Merge local + remote images in user-defined sequence
+    final List<dynamic> combinedImages = [];
+    if (listing.imageOrder != null && listing.imageOrder!.isNotEmpty) {
+      final remoteMap = {
+        for (var r in listing.images)
+          (r.fileId.isNotEmpty ? r.fileId : r.thumbUrl): r
+      };
+      final localMap = {
+        for (var l in (listing.localImages ?? [])) l.path: l
+      };
+      for (final key in listing.imageOrder!) {
+        if (key.startsWith('remote:')) {
+          final id = key.substring(7);
+          if (remoteMap.containsKey(id)) combinedImages.add(remoteMap[id]!);
+        } else if (key.startsWith('local:')) {
+          final path = key.substring(6);
+          if (localMap.containsKey(path)) combinedImages.add(localMap[path]!);
+        }
+      }
+      for (final r in listing.images) {
+        if (!combinedImages.contains(r)) combinedImages.add(r);
+      }
+      for (final l in (listing.localImages ?? [])) {
+        if (!combinedImages.contains(l)) combinedImages.add(l);
+      }
+    } else {
+      combinedImages.addAll([
+        ...listing.images,
+        ...(isPreview ? (listing.localImages ?? []) : []),
+      ]);
+    }
 
     final imageCount = combinedImages.length;
 
@@ -1162,10 +1193,12 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             if (listing.social['WhatsApp'] != null)
               _socialIcon(
                 imagePath: 'assets/images/whatsapp.svg',
-                onTap:
-                    () => CommonMethods.openWhatsApp(
-                      listing.social['WhatsApp'] ?? '',
-                    ),
+                onTap: () {
+                  _trackLead('whatsapp');
+                  CommonMethods.openWhatsApp(
+                    listing.social['WhatsApp'] ?? '',
+                  );
+                },
               ),
 
             // 📘 Facebook
@@ -1240,7 +1273,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   void _openUrl(String? url) async {
     if (url == null || url.isEmpty) return;
-
+    _trackLead('website');
     final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
@@ -2752,6 +2785,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     CommonMethods.navigateToSignInScreen(context);
                     return;
                   }
+                  _trackLead('directions');
                   final lat = currentListing.geo.lat;
                   final lng = currentListing.geo.lng;
 
@@ -3962,6 +3996,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                                               rating: currentListing.rating,
                                               localImages:
                                                   currentListing.localImages,
+                                              imageOrder:
+                                                  currentListing.imageOrder,
                                               since: currentListing.since,
                                               likes: currentListing.likes,
                                               views: currentListing.views,

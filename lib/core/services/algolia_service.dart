@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:startup_20/core/services/analytics_tracker.dart';
 
 class AlgoliaService {
   static const String appId = "ULXMZ6K4Q1";
@@ -33,6 +34,9 @@ class AlgoliaService {
   static Future<Map<String, List<dynamic>>> search(String query) async {
     final url = Uri.parse("https://$appId-dsn.algolia.net/1/indexes/*/queries");
 
+    // Visitor token le rahe hain taaki search click telemetry correlate ho sake
+    final visitorId = await AnalyticsTracker.getVisitorId();
+
     final response = await _client.post(
       url,
       headers: {
@@ -44,7 +48,9 @@ class AlgoliaService {
         "requests": [
           {
             "indexName": "Listings",
-            "params": "query=${Uri.encodeQueryComponent(query)}&hitsPerPage=10",
+            // clickAnalytics: true aur userToken bhej rahe hain web ki tarah taaki queryID generate ho
+            "params":
+                "query=${Uri.encodeQueryComponent(query)}&hitsPerPage=10&clickAnalytics=true&userToken=${Uri.encodeQueryComponent(visitorId)}",
           },
           {
             "indexName": "categories",
@@ -66,8 +72,21 @@ class AlgoliaService {
       throw Exception("Invalid Algolia response");
     }
 
+    final queryID = results[0]['queryID']?.toString();
+    final listingHits = List<dynamic>.from(results[0]['hits'] ?? []);
+
+    // Har hit me _queryID inject kar rahe hain taaki click hone par Insights API ko bhej sakein
+    if (queryID != null && queryID.isNotEmpty) {
+      for (final hit in listingHits) {
+        if (hit is Map) {
+          hit['_queryID'] = queryID;
+        }
+      }
+    }
+
     return {
-      "Listings": List<dynamic>.from(results[0]['hits'] ?? []),
+      "queryID": queryID != null ? [queryID] : [],
+      "Listings": listingHits,
       "categories": List<dynamic>.from(results[1]['hits'] ?? []),
     };
   }
