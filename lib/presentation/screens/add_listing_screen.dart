@@ -19,7 +19,9 @@ import 'package:startup_20/presentation/common_methods/location_picker.dart';
 
 import 'package:startup_20/presentation/common_methods/searchable_dropdown.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
+import 'package:reorderable_grid_view/reorderable_grid_view.dart';
 import 'package:startup_20/data/models/category_model.dart' as models;
+import 'package:startup_20/data/models/listing_image_item.dart';
 import 'package:startup_20/providers/auth_provider.dart';
 
 class DuplicateListingMatch {
@@ -68,10 +70,17 @@ class _AddListingScreenState extends State<AddListingScreen> {
   bool _draftLoaded = false;
 
   static const int _maxImagesLimit = 15;
-  final List<File> _images = [];
-  List<ImageFile> _remoteImages = [];
 
-  int get _totalImagesCount => _remoteImages.length + _images.length;
+  // Unified ordered image items (remote & local) jo drag-and-drop sequence maintain karti hai
+  final List<ListingImageItem> _imageItems = [];
+
+  // Backward compatibility ke liye getters
+  List<File> get _images =>
+      _imageItems.where((i) => !i.isRemote).map((i) => i.localFile!).toList();
+  List<ImageFile> get _remoteImages =>
+      _imageItems.where((i) => i.isRemote).map((i) => i.remoteImage!).toList();
+
+  int get _totalImagesCount => _imageItems.length;
   int get _remainingImageSlots => _maxImagesLimit - _totalImagesCount;
 
   Timer? _duplicateCheckDebounce;
@@ -495,7 +504,11 @@ class _AddListingScreenState extends State<AddListingScreen> {
       _addOpenHours = true;
     }
 
-    _remoteImages = List<ImageFile>.from(listing.images);
+    // Existing listing ki images ko unified items me load kar rahe hain
+    _imageItems.clear();
+    _imageItems.addAll(
+      listing.images.map((img) => ListingImageItem.remote(img)),
+    );
 
     _socialFormCtrl.values = Map<String, dynamic>.from(listing.social);
 
@@ -566,7 +579,9 @@ class _AddListingScreenState extends State<AddListingScreen> {
               .toList();
 
       setState(() {
-        _images.addAll(filesToAdd);
+        _imageItems.addAll(
+          filesToAdd.map((file) => ListingImageItem.local(file)),
+        );
       });
 
       if (pickedFiles.length > allowedSlots) {
@@ -724,6 +739,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
 
       images: _remoteImages,
       localImages: _images,
+      imageOrder: _imageItems.map((i) => i.keyString).toList(),
 
       reviews: 0,
       rating: 0,
@@ -855,7 +871,7 @@ class _AddListingScreenState extends State<AddListingScreen> {
         return;
       }
       setState(() {
-        _images.add(File(pickedFile.path));
+        _imageItems.add(ListingImageItem.local(File(pickedFile.path)));
       });
     }
   }
@@ -1112,119 +1128,297 @@ class _AddListingScreenState extends State<AddListingScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          // Remote images
-          if (isEditing && _remoteImages.isNotEmpty) ...[
-            Text(
-              "Existing Images (${_remoteImages.length})",
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 120,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _remoteImages.length,
-                itemBuilder: (context, index) {
-                  return Stack(
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.only(right: 12),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            _remoteImages[index].thumbUrl,
-                            width: 120,
-                            height: 120,
-                            fit: BoxFit.cover,
-                          ),
+          // Reorderable Image Gallery (Unified remote & local images)
+          if (_imageItems.isNotEmpty) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      "Listing Images",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: AppColors.BLACK,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.THEME_COLOR.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        "${_imageItems.length}/$_maxImagesLimit",
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.THEME_COLOR,
                         ),
                       ),
-                      Positioned(
-                        top: 4,
-                        right: 16,
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _remoteImages.removeAt(index);
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: const BoxDecoration(
-                              color: AppColors.BLACK_54,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.close,
-                              size: 18,
-                              color: AppColors.WHITE,
-                            ),
-                          ),
-                        ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: const [
+                    Icon(
+                      Icons.touch_app_outlined,
+                      size: 13,
+                      color: AppColors.GREY,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      "Hold & drag to reorder",
+                      style: TextStyle(fontSize: 11, color: AppColors.GREY),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // 3-Column Reorderable Grid View
+            ReorderableGridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 0.82,
+              ),
+              itemCount: _imageItems.length,
+              onReorder: (int oldIndex, int newIndex) {
+                // Images ka sequence grid me dynamically update ho raha hai
+                setState(() {
+                  final item = _imageItems.removeAt(oldIndex);
+                  _imageItems.insert(newIndex, item);
+                });
+              },
+              itemBuilder: (context, index) {
+                final item = _imageItems[index];
+                final isCover = index == 0;
+
+                return Container(
+                  key: ValueKey(item.id),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isCover
+                          ? AppColors.THEME_COLOR
+                          : AppColors.GREY_SHADE_300,
+                      width: isCover ? 2.0 : 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       ),
                     ],
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          // Selected images
-          if (_images.isNotEmpty) ...[
-            Text(
-              "New Images (${_images.length})",
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 120,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _images.length,
-                itemBuilder: (context, index) {
-                  return Stack(
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.only(right: 12),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            _images[index],
-                            width: 120,
-                            height: 120,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Background image (remote ImageFile ya local File)
+                        if (item.isRemote)
+                          CachedNetworkImage(
+                            imageUrl: item.remoteImage!.thumbUrl.isNotEmpty
+                                ? item.remoteImage!.thumbUrl
+                                : item.remoteImage!.fullUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: AppColors.GREY_SHADE_100,
+                            ),
+                            errorWidget: (context, url, err) => Container(
+                              color: AppColors.GREY_SHADE_300,
+                              child: const Icon(
+                                Icons.broken_image,
+                                color: AppColors.GREY,
+                              ),
+                            ),
+                          )
+                        else
+                          Image.file(
+                            item.localFile!,
                             fit: BoxFit.cover,
                           ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 4,
-                        right: 16,
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _images.removeAt(index);
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: const BoxDecoration(
-                              color: AppColors.BLACK_54,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.close,
-                              size: 18,
-                              color: AppColors.WHITE,
+
+                        // Gradient overlays badges aur buttons ki readability ke liye
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 0.55),
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: 0.70),
+                                ],
+                                stops: const [0.0, 0.45, 1.0],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  );
-                },
-              ),
+
+                        // Top-Left: Sequence number chip (#1, #2, #3, ...) + "New" tag for freshly added images
+                        Positioned(
+                          top: 6,
+                          left: 6,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(
+                                    alpha: 0.55,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  "#${index + 1}",
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.WHITE,
+                                  ),
+                                ),
+                              ),
+                              // Editing ke time newly added local photos pe "New" badge
+                              if (isEditing && !item.isRemote) ...[
+                                const SizedBox(width: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.GREEN,
+                                    borderRadius:
+                                        BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    "New",
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.WHITE,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+
+                        // Top-Right: Delete (X) button
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _imageItems.removeAt(index);
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(
+                                  alpha: 0.65,
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                size: 14,
+                                color: AppColors.WHITE,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // Bottom: "Cover" for index 0, "Set as Cover" for other indices
+                        Positioned(
+                          bottom: 6,
+                          left: 6,
+                          right: 6,
+                          child: isCover
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 3.5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.THEME_COLOR,
+                                    borderRadius:
+                                        BorderRadius.circular(5),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Text(
+                                    "Cover",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.WHITE,
+                                    ),
+                                  ),
+                                )
+                              : GestureDetector(
+                                  onTap: () {
+                                    // 1-tap pe is photo ko 1st (Cover) position pe shift kar rahe hain
+                                    setState(() {
+                                      final itm =
+                                          _imageItems.removeAt(index);
+                                      _imageItems.insert(0, itm);
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 3.5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.65,
+                                      ),
+                                      borderRadius:
+                                          BorderRadius.circular(5),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.45,
+                                        ),
+                                        width: 0.7,
+                                      ),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: const Text(
+                                      "Set as Cover",
+                                      style: TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.WHITE,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: 16),
+
           ],
         ],
       ),

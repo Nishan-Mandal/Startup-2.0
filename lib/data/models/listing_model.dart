@@ -35,6 +35,7 @@ class Listing {
   final int ratingCount;
   final double rating;
   final List<File>? localImages;
+  final List<String>? imageOrder;
   final int since;
   int likes; //Keeping is non final for UI optimisation
   final int views;
@@ -43,6 +44,7 @@ class Listing {
   final Map<String, int> ratingStats;
   final Map<String, double> factorAvgRatings;
   final Map<String, DaySchedule> businessHours;
+  final Map<String, int> leads;
 
   Listing({
     required this.listingId,
@@ -76,6 +78,7 @@ class Listing {
     required this.ratingCount,
     required this.rating,
     this.localImages,
+    this.imageOrder,
     required this.since,
     required this.likes,
     required this.views,
@@ -84,6 +87,7 @@ class Listing {
     required this.ratingStats,
     required this.factorAvgRatings,
     required this.businessHours,
+    this.leads = const {'calls': 0, 'whatsapp': 0, 'directions': 0, 'website': 0, 'shares': 0},
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) {
@@ -128,6 +132,10 @@ class Listing {
           (json['images'] as List<dynamic>? ?? [])
               .map((e) => ImageFile.fromJson(e))
               .toList(),
+      imageOrder:
+          json['imageOrder'] != null
+              ? List<String>.from(json['imageOrder'])
+              : null,
       reviews: json['reviews'] ?? 0,
       ratingCount: json['ratingCount'] ?? 0,
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
@@ -160,6 +168,12 @@ class Listing {
             ),
           ) ??
           {},
+
+      leads:
+          (json['leads'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, (v as num).toInt()),
+          ) ??
+          const {'calls': 0, 'whatsapp': 0, 'directions': 0, 'website': 0, 'shares': 0},
     );
   }
 
@@ -202,6 +216,7 @@ class Listing {
       // 'ratingStats': ratingStats,
       // 'factorsAvgRatings': factorAvgRatings,
       'social': social,
+      // 'leads': leads,
       'businessHours': businessHours.map(
         (day, schedule) => MapEntry(day, schedule.toJson()),
       ),

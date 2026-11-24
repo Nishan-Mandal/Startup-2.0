@@ -7,6 +7,7 @@ import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/presentation/common_methods/common_methods.dart';
 import 'package:startup_20/presentation/common_methods/searchable_dropdown.dart';
 import 'package:startup_20/presentation/common_widgets/common_widgets.dart';
+import 'package:startup_20/presentation/screens/listing_analytics_screen.dart';
 import 'package:startup_20/presentation/screens/listing_detail_screen.dart';
 import 'package:startup_20/presentation/screens/logins/signin_screen.dart';
 import 'package:startup_20/presentation/screens/search_screen.dart';
@@ -41,6 +42,8 @@ class _ListingPageState extends State<ListingPage> {
       widget.title == 'Pending Approvals' || widget.title == 'Deleted Listings';
 
   bool get _isFilterEnabled => !_isAdminScreen;
+
+  bool get _isMyListings => widget.title == 'My Listings';
 
   @override
   void initState() {
@@ -550,14 +553,19 @@ class _ListingPageState extends State<ListingPage> {
             controller: _scrollController,
             padding: const EdgeInsets.all(15),
             itemCount: listings.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
               childAspectRatio: 3 / 3.8,
+              mainAxisExtent: _isMyListings ? 238 : null,
             ),
             itemBuilder: (context, index) {
               final listing = listings[index];
+
+              if (_isMyListings) {
+                return _buildMyListingCard(listing);
+              }
 
               return GestureDetector(
                 onTap: () {
@@ -736,6 +744,103 @@ class _ListingPageState extends State<ListingPage> {
                 },
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyListingCard(Listing listing) {
+    return GestureDetector(
+      onTap: () {
+        CommonMethods.navigateToListingDetailScreen(
+          context,
+          listing,
+          listings,
+        );
+      },
+      child: CommonWidgets.listingCard(
+        listing,
+        bottomBar: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                ),
+                onTap: () {
+                  CommonMethods.navigateToListingDetailScreen(
+                    context,
+                    listing,
+                    listings,
+                  );
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.visibility_outlined,
+                        size: 13,
+                        color: AppColors.BLACK_54,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        "Details",
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.BLACK_54,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              height: 18,
+              width: 1,
+              color: AppColors.GREY_SHADE_300,
+            ),
+            Expanded(
+              child: InkWell(
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(16),
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ListingAnalyticsScreen(listing: listing),
+                    ),
+                  );
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.insights_rounded,
+                        size: 13,
+                        color: AppColors.THEME_COLOR,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        "Analytics",
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.THEME_COLOR,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
