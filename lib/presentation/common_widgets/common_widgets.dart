@@ -374,7 +374,7 @@ class CommonWidgets {
   }
 
   /// Listing Card
-  static Widget listingCard(var listing) {
+  static Widget listingCard(var listing, {Widget? bottomBar}) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.WHITE,
@@ -507,6 +507,14 @@ class CommonWidgets {
               ],
             ),
           ),
+          if (bottomBar != null) ...[
+            const Spacer(),
+            Divider(
+              height: 1,
+              color: AppColors.GREY_SHADE_300.withValues(alpha: 0.8),
+            ),
+            bottomBar,
+          ],
         ],
       ),
     );

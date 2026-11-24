@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:startup_20/core/constants/app_colors.dart';
 import 'package:startup_20/core/services/algolia_service.dart';
+import 'package:startup_20/core/services/analytics_tracker.dart';
 import 'package:startup_20/data/models/filter_options_model.dart';
 import 'package:startup_20/data/models/listing_model.dart';
 import 'package:startup_20/data/models/category_model.dart';
@@ -48,6 +49,7 @@ class _SearchScreenState extends State<SearchScreen> {
   bool showSuggestions = true;
   ListingFilterOptions _filterOptions = const ListingFilterOptions();
   Position? _userPosition;
+  String? _currentSearchQueryId;
 
   @override
   void initState() {
@@ -227,6 +229,11 @@ class _SearchScreenState extends State<SearchScreen> {
 
     try {
       final results = await AlgoliaService.search(text);
+
+      final queryList = results['queryID'];
+      _currentSearchQueryId = (queryList != null && queryList.isNotEmpty)
+          ? queryList.first.toString()
+          : null;
 
       final listingHits = results['Listings'] ?? [];
       final categoryHits = results['categories'] ?? [];
@@ -1312,12 +1319,25 @@ class _SearchScreenState extends State<SearchScreen> {
                   final listing = listingResults[index];
 
                   return GestureDetector(
-                    onTap:
-                        () => CommonMethods.navigateToListingDetailScreen(
-                          context,
-                          listing,
-                          [],
-                        ),
+                    onTap: () {
+                      // Search result click event bhej rahe hain (GA4 select_item + Algolia Insights)
+                      if (_currentSearchQueryId != null) {
+                        unawaited(
+                          AnalyticsTracker.trackSearchClick(
+                            queryID: _currentSearchQueryId,
+                            objectID: listing.listingId,
+                            position: index + 1,
+                            listingName: listing.name,
+                            category: listing.category,
+                          ),
+                        );
+                      }
+                      CommonMethods.navigateToListingDetailScreen(
+                        context,
+                        listing,
+                        [],
+                      );
+                    },
                     child: CommonWidgets.listingCard(listing),
                   );
                 },
